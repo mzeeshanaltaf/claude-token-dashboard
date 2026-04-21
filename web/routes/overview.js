@@ -66,18 +66,21 @@ export default async function (root) {
       ${rangeTabs}
     </div>
 
-    <div class="row cols-7">
+    <div class="row cols-4">
+      ${kpi('Projects',     fmt.int(totals.projects),       fmt.int(totals.projects))}
       ${kpi('Sessions',     fmt.int(totals.sessions),       fmt.int(totals.sessions))}
       ${kpi('Turns',        fmt.int(totals.turns),          fmt.int(totals.turns))}
-      ${kpi('Input',        fmt.compact(totals.input_tokens),       fmt.int(totals.input_tokens) + ' tokens')}
-      ${kpi('Output',       fmt.compact(totals.output_tokens),      fmt.int(totals.output_tokens) + ' tokens')}
-      ${kpi('Cache read',   fmt.compact(totals.cache_read_tokens),  fmt.int(totals.cache_read_tokens) + ' tokens')}
-      ${kpi('Cache create', fmt.compact(cacheCreate),               fmt.int(cacheCreate) + ' tokens')}
       <div class="card kpi cost">
         <div class="label">Est. cost</div>
         <div class="value" title="${fmt.usd(totals.cost_usd)}">${fmt.usd(totals.cost_usd)}</div>
         ${planSubtitle()}
       </div>
+    </div>
+    <div class="row cols-4" style="margin-top:16px">
+      ${kpi('Input',        fmt.compact(totals.input_tokens),       fmt.int(totals.input_tokens) + ' tokens')}
+      ${kpi('Output',       fmt.compact(totals.output_tokens),      fmt.int(totals.output_tokens) + ' tokens')}
+      ${kpi('Cache read',   fmt.compact(totals.cache_read_tokens),  fmt.int(totals.cache_read_tokens) + ' tokens')}
+      ${kpi('Cache create', fmt.compact(cacheCreate),               fmt.int(cacheCreate) + ' tokens')}
     </div>
 
     <details class="card glossary" style="margin-top:16px">

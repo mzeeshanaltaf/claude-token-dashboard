@@ -11,7 +11,7 @@ A local dashboard that reads the JSONL transcripts Claude Code writes to `~/.cla
 ## What this is useful for
 
 - Seeing which of your prompts are expensive (surprise: they usually involve large tool results).
-- Comparing token usage across projects you've worked on.
+- Comparing token usage across projects you've worked on — click any project to drill into its sessions.
 - Spotting wasteful patterns — the same file read twenty times in a session, a tool call returning 80k tokens.
 - Understanding what a "cache hit" actually saves you.
 - If you're on Pro or Max, confirming you're getting your money's worth in API-equivalent dollars.
@@ -67,7 +67,7 @@ python3 cli.py dashboard --projects-dir /path/to/projects --db /path/to/cache.db
 | `CLAUDE_PROJECTS_DIR` | `~/.claude/projects` | Where to scan for session JSONL files |
 | `TOKEN_DASHBOARD_DB` | `~/.claude/token-dashboard.db` | SQLite cache location |
 
-Pricing lives in [`pricing.json`](pricing.json). Edit it directly if model prices change or to add a new plan.
+Pricing lives in [`pricing.json`](pricing.json). Edit it directly if model prices change or to add a new plan. Current rates are sourced from the [Anthropic pricing page](https://platform.claude.com/docs/en/about-claude/pricing).
 
 ## CLI reference
 
@@ -89,15 +89,19 @@ Change the port: `PORT=9000 python3 cli.py dashboard`.
 
 The dashboard is a single page with a hash-router tab bar across the top. Each tab is backed by its own JSON API under `/api/`:
 
-- **Overview** — all-time input/output/cache tokens, sessions, turns, estimated cost on your chosen plan, daily work and cache-read charts, tokens-by-project, token share by model, top tools by call count, and recent sessions. This is the landing tab.
-- **Prompts** — your most expensive user prompts ranked by tokens. Click any row to see the assistant response, tool calls made, and the size of each tool result.
-- **Sessions** — turn-by-turn view of any single session, with per-turn tokens and tool calls.
-- **Projects** — per-project comparison: tokens, session counts, and which files were touched most.
+- **Overview** — KPI cards for total projects, sessions, turns, estimated cost, and all token categories (input / output / cache read / cache create). Daily work and cache-read charts, tokens-by-project, token share by model, top tools by call count, and recent sessions. Supports 7d / 30d / 90d / All time ranges. This is the landing tab.
+- **Prompts** — user prompts filterable by date range (7d / 30d / 90d / All, default 30d) and sortable by most tokens or most recent. Click any row to expand the full prompt text, token details, and a link to the originating session.
+- **Sessions** — list of sessions with sortable columns (started, turns, tokens). Click a session ID to open the turn-by-turn detail view, where every turn shows its local timestamp, model, token counts, and a clickable prompt/tools cell that expands to the full text in a modal.
+- **Projects** — per-project comparison with sortable columns (sessions, turns, billable tokens). Click any project name to open a dedicated project page listing all its sessions with started/ended times, turns, and tokens. Each session links directly to its turn-by-turn detail view.
 - **Skills** — which skills you invoke most often, and (where we can measure them) their token cost. See [limitations](docs/KNOWN_LIMITATIONS.md#skills-token-counts-are-partial).
 - **Tips** — rule-based suggestions for reducing token usage (repeated file reads, oversized tool results, low cache-hit rate, etc.).
 - **Settings** — switch pricing between API / Pro / Max / Max-20x so cost figures everywhere else reflect your actual plan.
 
 The Overview tab also has a built-in "What do these numbers mean?" panel that explains input/output/cache tokens in plain English.
+
+### Privacy controls
+
+Press **Cmd+B** (macOS) or **Ctrl+B** (Windows/Linux) on any tab to blur all prompt text and project names — useful when sharing your screen.
 
 ## Troubleshooting
 
@@ -133,6 +137,16 @@ Data flow: `cli.py` → `token_dashboard/scanner.py` → SQLite DB; `token_dashb
 ## Contributing
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md). Short version: fork, `python3 -m unittest discover tests` before opening a PR, keep it stdlib-only.
+
+## Credits
+
+This project is a fork of [nateherkai/token-dashboard](https://github.com/nateherkai/token-dashboard), extended with following features:
+
+- In Projects section, added the support of sortable columns and clicking on project opens the details page which show session details associated with the project
+- In Overview section, added Projects KPI
+- In Prompts section, added date range filter (7d, 30d, 90d, All)
+- In Sessions, added the support of sortable columns, local timestamps and clickable full text modal
+- Corrected the model pricing in [`pricing.json`](pricing.json)
 
 ## License
 

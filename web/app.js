@@ -20,7 +20,20 @@ export const fmt = {
     return '';
   },
   modelShort: m => (m || '').replace('claude-', ''),
-  ts: t => (t || '').slice(0, 16).replace('T', ' '),
+  ts: t => {
+    if (!t) return '';
+    const d = new Date(t);
+    if (isNaN(d.getTime())) return t.slice(0, 16).replace('T', ' ');
+    const p = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  },
+  tsTime: t => {
+    if (!t) return '';
+    const d = new Date(t);
+    if (isNaN(d.getTime())) return t.slice(11, 19);
+    const p = n => String(n).padStart(2, '0');
+    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  },
 };
 
 export async function api(path, opts) {
@@ -65,6 +78,7 @@ async function render() {
   const path = hash.split('?')[0];
   let key = path;
   if (path.startsWith('/sessions/')) key = '/sessions';
+  if (path.startsWith('/projects/')) key = '/projects';
   setActiveTab(key);
   const loader = ROUTES[key] || ROUTES['/overview'];
   const mod = await loader();

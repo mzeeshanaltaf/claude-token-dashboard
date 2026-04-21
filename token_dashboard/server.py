@@ -8,11 +8,11 @@ import queue
 import threading
 import time
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 
 from .db import (
     overview_totals, expensive_prompts, project_summary,
-    tool_token_breakdown, recent_sessions, session_turns,
+    tool_token_breakdown, recent_sessions, session_turns, project_sessions,
     daily_token_breakdown, model_breakdown, skill_breakdown,
 )
 from .pricing import load_pricing, cost_for, get_plan, set_plan
@@ -100,7 +100,8 @@ def build_handler(db_path: str, projects_dir: str):
             if path == "/api/prompts":
                 limit = _clamp_limit(qs.get("limit", ["50"])[0], 50)
                 sort = qs.get("sort", ["tokens"])[0]
-                rows = expensive_prompts(db_path, limit=limit, sort=sort)
+                rows = expensive_prompts(db_path, limit=limit, sort=sort,
+                                         since=since, until=until)
                 for r in rows:
                     c = cost_for(r["model"], {
                         "input_tokens": 0, "output_tokens": 0,
@@ -137,6 +138,9 @@ def build_handler(db_path: str, projects_dir: str):
             if path.startswith("/api/sessions/"):
                 sid = path.rsplit("/", 1)[1]
                 return _send_json(self, session_turns(db_path, sid))
+            if path.startswith("/api/projects/") and path.endswith("/sessions"):
+                slug = unquote(path[len("/api/projects/"):-len("/sessions")])
+                return _send_json(self, project_sessions(db_path, slug))
             if path == "/api/tips":
                 return _send_json(self, all_tips(db_path))
             if path == "/api/plan":

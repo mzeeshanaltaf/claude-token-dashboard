@@ -189,7 +189,8 @@ def best_project_name(cwds, slug: str) -> str:
 def overview_totals(db_path, since=None, until=None) -> dict:
     rng, args = _range_clause(since, until)
     sql = f"""
-      SELECT COUNT(DISTINCT session_id) AS sessions,
+      SELECT COUNT(DISTINCT session_id)   AS sessions,
+             COUNT(DISTINCT project_slug) AS projects,
              SUM(CASE WHEN type='user' THEN 1 ELSE 0 END) AS turns,
              COALESCE(SUM(input_tokens),0)            AS input_tokens,
              COALESCE(SUM(output_tokens),0)           AS output_tokens,
@@ -202,13 +203,15 @@ def overview_totals(db_path, since=None, until=None) -> dict:
         return dict(c.execute(sql, args).fetchone())
 
 
-def expensive_prompts(db_path, limit: int = 50, sort: str = "tokens") -> list:
+def expensive_prompts(db_path, limit: int = 50, sort: str = "tokens",
+                      since=None, until=None) -> list:
     """User prompt joined with the immediately-following assistant turn's tokens.
 
     sort="tokens" (default) → largest billable first.
     sort="recent"           → newest first.
     """
     order = "u.timestamp DESC" if sort == "recent" else "billable_tokens DESC"
+    rng, rng_args = _range_clause(since, until, col="u.timestamp")
     sql = f"""
       SELECT u.uuid AS user_uuid, u.session_id, u.project_slug, u.timestamp,
              u.prompt_text, u.prompt_chars,
@@ -218,12 +221,12 @@ def expensive_prompts(db_path, limit: int = 50, sort: str = "tokens") -> list:
              COALESCE(a.cache_read_tokens,0) AS cache_read_tokens
         FROM messages u
         JOIN messages a ON a.parent_uuid = u.uuid AND a.type='assistant'
-       WHERE u.type='user' AND u.prompt_text IS NOT NULL
+       WHERE u.type='user' AND u.prompt_text IS NOT NULL {rng}
        ORDER BY {order}
        LIMIT ?
     """
     with connect(db_path) as c:
-        return [dict(r) for r in c.execute(sql, (limit,))]
+        return [dict(r) for r in c.execute(sql, (*rng_args, limit))]
 
 
 def project_summary(db_path, since=None, until=None) -> list:
@@ -309,6 +312,30 @@ def session_turns(db_path, session_id: str) -> list:
     """
     with connect(db_path) as c:
         return [dict(r) for r in c.execute(sql, (session_id,))]
+
+
+def project_sessions(db_path, slug: str) -> list:
+    sql = """
+      SELECT session_id, project_slug,
+             MIN(timestamp) AS started, MAX(timestamp) AS ended,
+             SUM(CASE WHEN type='user' THEN 1 ELSE 0 END) AS turns,
+             SUM(input_tokens)+SUM(output_tokens) AS tokens
+        FROM messages
+       WHERE project_slug = ?
+       GROUP BY session_id
+       ORDER BY ended DESC
+    """
+    with connect(db_path) as c:
+        rows = [dict(r) for r in c.execute(sql, (slug,))]
+        if rows:
+            cwds = [row["cwd"] for row in c.execute(
+                "SELECT DISTINCT cwd FROM messages WHERE project_slug=? AND cwd IS NOT NULL",
+                (slug,),
+            )]
+            name = best_project_name(cwds, slug)
+            for r in rows:
+                r["project_name"] = name
+    return rows
 
 
 def daily_token_breakdown(db_path, since=None, until=None) -> list:

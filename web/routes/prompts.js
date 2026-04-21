@@ -5,6 +5,13 @@ const SORTS = [
   { key: 'recent', label: 'Most recent' },
 ];
 
+const RANGES = [
+  { key: '7d',  label: '7d',  days: 7 },
+  { key: '30d', label: '30d', days: 30 },
+  { key: '90d', label: '90d', days: 90 },
+  { key: 'all', label: 'All', days: null },
+];
+
 function readSort() {
   const q = (location.hash.split('?')[1] || '');
   const m = /(?:^|&)sort=([^&]+)/.exec(q);
@@ -12,18 +19,41 @@ function readSort() {
   return SORTS.find(s => s.key === k) || SORTS[0];
 }
 
-function writeSort(key) {
+function readRange() {
+  const q = (location.hash.split('?')[1] || '');
+  const m = /(?:^|&)range=([^&]+)/.exec(q);
+  const k = m && decodeURIComponent(m[1]);
+  return RANGES.find(r => r.key === k) || RANGES[1]; // default 30d
+}
+
+function writeParams(sort, range) {
   const base = (location.hash.replace(/^#/, '').split('?')[0]) || '/prompts';
-  location.hash = '#' + base + '?sort=' + encodeURIComponent(key);
+  location.hash = '#' + base + '?sort=' + encodeURIComponent(sort) +
+                  '&range=' + encodeURIComponent(range);
+}
+
+function sinceIso(range) {
+  if (!range.days) return null;
+  return new Date(Date.now() - range.days * 86400 * 1000).toISOString();
 }
 
 export default async function (root) {
-  const sort = readSort();
-  const rows = await api('/api/prompts?limit=100&sort=' + encodeURIComponent(sort.key));
+  const sort  = readSort();
+  const range = readRange();
+  const since = sinceIso(range);
+
+  let url = '/api/prompts?limit=200&sort=' + encodeURIComponent(sort.key);
+  if (since) url += '&since=' + encodeURIComponent(since);
+  const rows = await api(url);
 
   const sortTabs = `
     <div class="range-tabs" role="tablist">
       ${SORTS.map(s => `<button data-sort="${s.key}" class="${s.key === sort.key ? 'active' : ''}">${s.label}</button>`).join('')}
+    </div>`;
+
+  const rangeTabs = `
+    <div class="range-tabs" role="tablist">
+      ${RANGES.map(r => `<button data-range="${r.key}" class="${r.key === range.key ? 'active' : ''}">${r.label}</button>`).join('')}
     </div>`;
 
   const subtitle = sort.key === 'recent'
@@ -33,7 +63,9 @@ export default async function (root) {
   root.innerHTML = `
     <div class="flex" style="margin-bottom:14px">
       <h2 style="margin:0;font-size:16px;letter-spacing:-0.01em">Prompts</h2>
+      <span class="muted" style="font-size:12px">${range.days ? `last ${range.days} days` : 'all time'}</span>
       <div class="spacer"></div>
+      ${rangeTabs}
       ${sortTabs}
     </div>
 
@@ -64,8 +96,11 @@ export default async function (root) {
     <div id="drawer"></div>
   `;
 
-  root.querySelectorAll('.range-tabs button').forEach(btn => {
-    btn.addEventListener('click', () => writeSort(btn.dataset.sort));
+  root.querySelectorAll('.range-tabs button[data-sort]').forEach(btn => {
+    btn.addEventListener('click', () => writeParams(btn.dataset.sort, range.key));
+  });
+  root.querySelectorAll('.range-tabs button[data-range]').forEach(btn => {
+    btn.addEventListener('click', () => writeParams(sort.key, btn.dataset.range));
   });
 
   root.querySelectorAll('#prompts tbody tr').forEach(tr => {
