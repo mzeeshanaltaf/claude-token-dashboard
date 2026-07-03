@@ -14,6 +14,7 @@ from .db import (
     overview_totals, expensive_prompts, project_summary,
     tool_token_breakdown, recent_sessions, session_turns, project_sessions,
     daily_token_breakdown, model_breakdown, skill_breakdown,
+    session_model_tokens, project_model_tokens,
 )
 from .pricing import load_pricing, cost_for, get_plan, set_plan
 from .tips import all_tips, dismiss_tip
@@ -50,6 +51,20 @@ def _clamp_limit(raw, default: int) -> int:
     except (TypeError, ValueError):
         return default
     return max(1, min(v, MAX_LIMIT))
+
+
+def _cost_by_key(model_rows, key: str, pricing: dict) -> dict:
+    """Sum per-model estimated USD into {key_value: cost} for the given rows.
+
+    A key is present only if at least one of its models matched pricing, so
+    callers can distinguish "no cost data" (absent) from "$0".
+    """
+    costs: dict = {}
+    for m in model_rows:
+        c = cost_for(m["model"], m, pricing)
+        if c["usd"] is not None:
+            costs[m[key]] = costs.get(m[key], 0.0) + c["usd"]
+    return costs
 
 
 def _serve_static(handler, rel: str) -> None:
@@ -111,14 +126,30 @@ def build_handler(db_path: str, projects_dir: str):
                     r["estimated_cost_usd"] = c["usd"]
                 return _send_json(self, rows)
             if path == "/api/projects":
-                return _send_json(self, project_summary(db_path, since, until))
+                rows = project_summary(db_path, since, until)
+                costs = _cost_by_key(
+                    project_model_tokens(db_path, since, until),
+                    "project_slug", pricing,
+                )
+                for r in rows:
+                    slug = r["project_slug"]
+                    r["estimated_cost_usd"] = round(costs[slug], 4) if slug in costs else None
+                return _send_json(self, rows)
             if path == "/api/tools":
                 return _send_json(self, tool_token_breakdown(db_path, since, until))
             if path == "/api/sessions":
-                return _send_json(self, recent_sessions(
+                rows = recent_sessions(
                     db_path, limit=_clamp_limit(qs.get("limit", ["20"])[0], 20),
                     since=since, until=until,
-                ))
+                )
+                costs = _cost_by_key(
+                    session_model_tokens(db_path, [r["session_id"] for r in rows]),
+                    "session_id", pricing,
+                )
+                for r in rows:
+                    sid = r["session_id"]
+                    r["estimated_cost_usd"] = round(costs[sid], 4) if sid in costs else None
+                return _send_json(self, rows)
             if path == "/api/daily":
                 return _send_json(self, daily_token_breakdown(db_path, since, until))
             if path == "/api/skills":
@@ -140,7 +171,15 @@ def build_handler(db_path: str, projects_dir: str):
                 return _send_json(self, session_turns(db_path, sid))
             if path.startswith("/api/projects/") and path.endswith("/sessions"):
                 slug = unquote(path[len("/api/projects/"):-len("/sessions")])
-                return _send_json(self, project_sessions(db_path, slug))
+                rows = project_sessions(db_path, slug)
+                costs = _cost_by_key(
+                    session_model_tokens(db_path, [r["session_id"] for r in rows]),
+                    "session_id", pricing,
+                )
+                for r in rows:
+                    sid = r["session_id"]
+                    r["estimated_cost_usd"] = round(costs[sid], 4) if sid in costs else None
+                return _send_json(self, rows)
             if path == "/api/tips":
                 return _send_json(self, all_tips(db_path))
             if path == "/api/plan":

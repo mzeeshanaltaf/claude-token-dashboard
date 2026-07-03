@@ -29,10 +29,10 @@ No `pip install`. No Node.js. No build step.
 ```bash
 git clone https://github.com/nateherkai/token-dashboard.git
 cd token-dashboard
-python3 cli.py dashboard
+python cli.py dashboard
 ```
 
-> On Windows, if `python3` isn't on your PATH, substitute `py -3` for `python3` in every command below.
+> On Windows, if `python3` isn't on your PATH, substitute `py -3` for `python3` in every command below. You can also double-click [`start_dashboard.bat`](start_dashboard.bat) to launch the dashboard without opening a terminal.
 
 The command:
 1. Scans `~/.claude/projects/` (first run can take 20–60 seconds on a heavy user's machine).
@@ -91,8 +91,8 @@ The dashboard is a single page with a hash-router tab bar across the top. Each t
 
 - **Overview** — KPI cards for total projects, sessions, turns, estimated cost, and all token categories (input / output / cache read / cache create). Daily work and cache-read charts, tokens-by-project, token share by model, top tools by call count, and recent sessions. Supports 7d / 30d / 90d / All time ranges. This is the landing tab.
 - **Prompts** — user prompts filterable by date range (7d / 30d / 90d / All, default 30d) and sortable by most tokens or most recent. Click any row to expand the full prompt text, token details, and a link to the originating session.
-- **Sessions** — list of sessions with sortable columns (started, turns, tokens). Click a session ID to open the turn-by-turn detail view, where every turn shows its local timestamp, model, token counts, and a clickable prompt/tools cell that expands to the full text in a modal.
-- **Projects** — per-project comparison with sortable columns (sessions, turns, billable tokens). Click any project name to open a dedicated project page listing all its sessions with started/ended times, turns, and tokens. Each session links directly to its turn-by-turn detail view.
+- **Sessions** — list of sessions with sortable columns (started, turns, tokens, estimated cost). Click a session ID to open the turn-by-turn detail view, where every turn shows its local timestamp, model, token counts, and a clickable prompt/tools cell that expands to the full text in a modal.
+- **Projects** — per-project comparison with sortable columns (sessions, turns, billable tokens, estimated cost). Click any project name to open a dedicated project page: a KPI summary (total sessions, turns, billable tokens, cache reads, and estimated cost) above all its sessions, each showing started/ended times, turns, tokens, and estimated cost. Each session links directly to its turn-by-turn detail view.
 - **Skills** — which skills you invoke most often, and (where we can measure them) their token cost. See [limitations](docs/KNOWN_LIMITATIONS.md#skills-token-counts-are-partial).
 - **Tips** — rule-based suggestions for reducing token usage (repeated file reads, oversized tool results, low cache-hit rate, etc.).
 - **Settings** — switch pricing between API / Pro / Max / Max-20x so cost figures everywhere else reflect your actual plan.
@@ -146,7 +146,10 @@ This project is a fork of [nateherkai/token-dashboard](https://github.com/natehe
 - In Overview section, added Projects KPI
 - In Prompts section, added date range filter (7d, 30d, 90d, All)
 - In Sessions, added the support of sortable columns, local timestamps and clickable full text modal
-- Corrected the model pricing in [`pricing.json`](pricing.json)
+- Added an **Estimated Cost** column to the Sessions and Projects tables (and the project drill-down)
+- On the project detail page, added a KPI summary (sessions, turns, billable tokens, cache reads, estimated cost)
+- Corrected the model pricing in [`pricing.json`](pricing.json) and added Claude Fable 5
+- Added a Windows launcher ([`start_dashboard.bat`](start_dashboard.bat))
 
 ## License
 

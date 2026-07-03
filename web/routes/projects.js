@@ -30,6 +30,7 @@ async function renderList(root) {
             ${th('turns', 'turns', 'num ')}
             ${th('billable_tokens', 'billable tokens', 'num ')}
             <th class="num">cache reads</th>
+            ${th('estimated_cost_usd', 'est. cost', 'num ')}
           </tr></thead>
           <tbody>
             ${sorted.map(r => `
@@ -41,6 +42,7 @@ async function renderList(root) {
                 <td class="num">${fmt.int(r.turns)}</td>
                 <td class="num">${fmt.int(r.billable_tokens)}</td>
                 <td class="num">${fmt.int(r.cache_read_tokens)}</td>
+                <td class="num mono">${fmt.usd(r.estimated_cost_usd)}</td>
               </tr>`).join('')}
           </tbody>
         </table>
@@ -59,10 +61,18 @@ async function renderList(root) {
 }
 
 async function renderProject(root, slug) {
-  const sessions = await api('/api/projects/' + encodeURIComponent(slug) + '/sessions');
-  const name = (sessions[0] && sessions[0].project_name) || slug;
-  const totalTurns  = sessions.reduce((s, r) => s + (r.turns  || 0), 0);
-  const totalTokens = sessions.reduce((s, r) => s + (r.tokens || 0), 0);
+  const [sessions, projects] = await Promise.all([
+    api('/api/projects/' + encodeURIComponent(slug) + '/sessions'),
+    api('/api/projects'),
+  ]);
+  const summary = projects.find(p => p.project_slug === slug) || {};
+  const name = (sessions[0] && sessions[0].project_name) || summary.project_name || slug;
+
+  const kpi = (label, val, full, cls = '') => `
+    <div class="card kpi ${cls}">
+      <div class="label">${label}</div>
+      <div class="value" title="${full}">${val}</div>
+    </div>`;
 
   root.innerHTML = `
     <div class="card">
@@ -71,11 +81,17 @@ async function renderProject(root, slug) {
         <span class="spacer"></span>
         <a href="#/projects" class="muted">← all projects</a>
       </h2>
-      <div class="flex muted" style="font-family:var(--mono);font-size:12px;flex-wrap:wrap;gap:14px">
-        <span title="project slug">${fmt.htmlSafe(slug)}</span>
-        <span>${fmt.int(sessions.length)} session${sessions.length !== 1 ? 's' : ''}</span>
-        <span>${fmt.int(totalTurns)} turns</span>
-        <span>${fmt.int(totalTokens)} tokens</span>
+      <div class="muted" style="font-family:var(--mono);font-size:12px" title="project slug">${fmt.htmlSafe(slug)}</div>
+    </div>
+
+    <div class="row cols-5" style="margin-top:16px">
+      ${kpi('Sessions',        fmt.int(summary.sessions),                fmt.int(summary.sessions))}
+      ${kpi('Turns',           fmt.int(summary.turns),                   fmt.int(summary.turns))}
+      ${kpi('Billable tokens', fmt.compact(summary.billable_tokens),     fmt.int(summary.billable_tokens) + ' tokens')}
+      ${kpi('Cache reads',     fmt.compact(summary.cache_read_tokens),   fmt.int(summary.cache_read_tokens) + ' tokens')}
+      <div class="card kpi cost">
+        <div class="label">Est. cost</div>
+        <div class="value" title="${fmt.usd(summary.estimated_cost_usd)}">${fmt.usd(summary.estimated_cost_usd)}</div>
       </div>
     </div>
 
@@ -84,7 +100,7 @@ async function renderProject(root, slug) {
       ${sessions.length === 0
         ? `<p class="muted">No sessions found for this project.</p>`
         : `<table>
-          <thead><tr><th>started</th><th>ended</th><th class="num">turns</th><th class="num">tokens</th><th>session</th></tr></thead>
+          <thead><tr><th>started</th><th>ended</th><th class="num">turns</th><th class="num">tokens</th><th class="num">est. cost</th><th>session</th></tr></thead>
           <tbody>
             ${sessions.map(s => `
               <tr>
@@ -92,6 +108,7 @@ async function renderProject(root, slug) {
                 <td class="mono">${fmt.ts(s.ended)}</td>
                 <td class="num">${fmt.int(s.turns)}</td>
                 <td class="num">${fmt.int(s.tokens)}</td>
+                <td class="num mono">${fmt.usd(s.estimated_cost_usd)}</td>
                 <td><a href="#/sessions/${encodeURIComponent(s.session_id)}" class="mono">${fmt.htmlSafe(s.session_id.slice(0,8))}…</a></td>
               </tr>`).join('')}
           </tbody>

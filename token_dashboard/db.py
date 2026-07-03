@@ -383,6 +383,53 @@ def skill_breakdown(db_path, since=None, until=None) -> list:
         return [dict(r) for r in c.execute(sql, args)]
 
 
+def session_model_tokens(db_path, session_ids) -> list:
+    """Per (session_id, model) assistant-token sums for the given sessions.
+
+    Cost varies by model tier, so the caller sums cost_for() over these rows
+    to get a per-session estimate. Returns [] for an empty session list.
+    """
+    session_ids = list(session_ids or [])
+    if not session_ids:
+        return []
+    placeholders = ",".join("?" * len(session_ids))
+    sql = f"""
+      SELECT session_id, COALESCE(model, 'unknown') AS model,
+             COALESCE(SUM(input_tokens),0)            AS input_tokens,
+             COALESCE(SUM(output_tokens),0)           AS output_tokens,
+             COALESCE(SUM(cache_read_tokens),0)       AS cache_read_tokens,
+             COALESCE(SUM(cache_create_5m_tokens),0)  AS cache_create_5m_tokens,
+             COALESCE(SUM(cache_create_1h_tokens),0)  AS cache_create_1h_tokens
+        FROM messages
+       WHERE type = 'assistant' AND session_id IN ({placeholders})
+       GROUP BY session_id, model
+    """
+    with connect(db_path) as c:
+        return [dict(r) for r in c.execute(sql, session_ids)]
+
+
+def project_model_tokens(db_path, since=None, until=None) -> list:
+    """Per (project_slug, model) assistant-token sums.
+
+    Cost varies by model tier, so the caller sums cost_for() over these rows
+    to get a per-project estimate.
+    """
+    rng, args = _range_clause(since, until)
+    sql = f"""
+      SELECT project_slug, COALESCE(model, 'unknown') AS model,
+             COALESCE(SUM(input_tokens),0)            AS input_tokens,
+             COALESCE(SUM(output_tokens),0)           AS output_tokens,
+             COALESCE(SUM(cache_read_tokens),0)       AS cache_read_tokens,
+             COALESCE(SUM(cache_create_5m_tokens),0)  AS cache_create_5m_tokens,
+             COALESCE(SUM(cache_create_1h_tokens),0)  AS cache_create_1h_tokens
+        FROM messages
+       WHERE type = 'assistant' {rng}
+       GROUP BY project_slug, model
+    """
+    with connect(db_path) as c:
+        return [dict(r) for r in c.execute(sql, args)]
+
+
 def model_breakdown(db_path, since=None, until=None) -> list:
     """Per-model token totals + turn count. Caller computes cost via pricing."""
     rng, args = _range_clause(since, until)

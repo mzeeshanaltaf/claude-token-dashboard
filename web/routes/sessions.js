@@ -28,6 +28,7 @@ async function renderList(root) {
             <th>project</th>
             ${th('turns', 'turns', 'num ')}
             ${th('tokens', 'tokens', 'num ')}
+            ${th('estimated_cost_usd', 'est. cost', 'num ')}
             <th>session</th>
           </tr></thead>
           <tbody>
@@ -37,6 +38,7 @@ async function renderList(root) {
                 <td title="${fmt.htmlSafe(s.project_slug)}">${fmt.htmlSafe(s.project_name || s.project_slug)}</td>
                 <td class="num">${fmt.int(s.turns)}</td>
                 <td class="num">${fmt.int(s.tokens)}</td>
+                <td class="num mono">${fmt.usd(s.estimated_cost_usd)}</td>
                 <td><a href="#/sessions/${encodeURIComponent(s.session_id)}" class="mono">${fmt.htmlSafe(s.session_id.slice(0,8))}…</a></td>
               </tr>`).join('')}
           </tbody>
