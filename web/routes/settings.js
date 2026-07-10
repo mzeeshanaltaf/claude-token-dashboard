@@ -1,4 +1,4 @@
-import { api, state, $ } from '/web/app.js';
+import { api, state, $, planLabel } from '/web/app.js';
 
 export default async function (root) {
   const cur = await api('/api/plan');
@@ -45,7 +45,7 @@ export default async function (root) {
     const plan = $('#plan').value;
     await fetch('/api/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan }) });
     state.plan = plan;
-    document.getElementById('plan-pill').textContent = plan;
+    document.getElementById('plan-pill').textContent = planLabel(plan);
     $('#msg').textContent = 'Saved.';
     $('#msg').style.color = 'var(--good)';
   });

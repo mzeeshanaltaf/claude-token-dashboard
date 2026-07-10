@@ -78,17 +78,29 @@ const ROUTES = {
   '/settings': () => import('/web/routes/settings.js'),
 };
 
+function isMac() {
+  const p = (navigator.userAgentData && navigator.userAgentData.platform)
+    || navigator.platform || navigator.userAgent || '';
+  return /mac|iphone|ipad|ipod/i.test(p);
+}
+
+export function planLabel(plan) {
+  const p = state.pricing && state.pricing.plans && state.pricing.plans[plan];
+  return `Pricing Plan: ${(p && p.label) || plan}`;
+}
+
 function buildTopbar() {
   const wrap = document.createElement('header');
   wrap.className = 'topbar';
+  const blurKey = isMac() ? '⌘B' : 'Ctrl+B';
   wrap.innerHTML = `
-    <div class="brand">${LOGO_SVG}<span>Token Dashboard</span></div>
+    <div class="brand">${LOGO_SVG}<span>Claude Code Token Dashboard</span></div>
     <nav>
       ${Object.keys(ROUTES).map(p => `<a href="#${p}" data-route="${p}">${p.slice(1)}</a>`).join('')}
     </nav>
     <div class="spacer"></div>
-    <span class="pill" id="plan-pill">api</span>
-    <span class="pill muted" title="Cmd/Ctrl+B blurs sensitive text">⌘B blur</span>
+    <span class="pill" id="plan-pill">Pricing Plan: —</span>
+    <span class="pill muted" title="${blurKey} blurs sensitive text">${blurKey} blur</span>
   `;
   document.body.prepend(wrap);
 }
@@ -147,7 +159,7 @@ async function boot() {
   const planResp = await api('/api/plan');
   state.plan = planResp.plan;
   state.pricing = planResp.pricing;
-  $('#plan-pill').textContent = state.plan;
+  $('#plan-pill').textContent = planLabel(state.plan);
 
   await firstRun();
 
