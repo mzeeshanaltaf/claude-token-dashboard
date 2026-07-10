@@ -1,4 +1,4 @@
-import { api, fmt } from '/web/app.js';
+import { api, fmt, loadRange, saveRange } from '/web/app.js';
 
 const SORTS = [
   { key: 'tokens', label: 'Most tokens' },
@@ -22,11 +22,12 @@ function readSort() {
 function readRange() {
   const q = (location.hash.split('?')[1] || '');
   const m = /(?:^|&)range=([^&]+)/.exec(q);
-  const k = m && decodeURIComponent(m[1]);
-  return RANGES.find(r => r.key === k) || RANGES[1]; // default 30d
+  const k = (m && decodeURIComponent(m[1])) || loadRange();
+  return RANGES.find(r => r.key === k) || RANGES.find(r => r.key === 'all');
 }
 
 function writeParams(sort, range) {
+  saveRange(range);
   const base = (location.hash.replace(/^#/, '').split('?')[0]) || '/prompts';
   location.hash = '#' + base + '?sort=' + encodeURIComponent(sort) +
                   '&range=' + encodeURIComponent(range);
@@ -78,6 +79,7 @@ export default async function (root) {
           <th>model</th>
           <th class="num">tokens</th>
           <th class="num">cache rd</th>
+          <th>title</th>
           <th>session</th>
         </tr></thead>
         <tbody>
@@ -86,10 +88,11 @@ export default async function (root) {
               <td class="${sort.key === 'recent' ? 'mono' : 'num mono'}">${sort.key === 'recent' ? fmt.ts(r.timestamp) : fmt.usd4(r.estimated_cost_usd)}</td>
               <td class="blur-sensitive">${fmt.htmlSafe(fmt.short(r.prompt_text, 110))}</td>
               <td><span class="badge ${fmt.modelClass(r.model)}">${fmt.htmlSafe(fmt.modelShort(r.model))}</span></td>
-              <td class="num">${fmt.int(r.billable_tokens)}</td>
+              <td class="num">${fmt.int(r.core_tokens)}</td>
               <td class="num">${fmt.int(r.cache_read_tokens)}</td>
+              <td class="blur-sensitive" title="${fmt.htmlSafe(r.title || '')}">${r.title ? fmt.htmlSafe(fmt.short(r.title, 50)) : '<span class="muted">—</span>'}</td>
               <td><a href="#/sessions/${encodeURIComponent(r.session_id)}" class="mono" onclick="event.stopPropagation()">${fmt.htmlSafe(r.session_id.slice(0,8))}…</a></td>
-            </tr>`).join('') || '<tr><td colspan="6" class="muted">no prompts yet</td></tr>'}
+            </tr>`).join('') || '<tr><td colspan="7" class="muted">no prompts yet</td></tr>'}
         </tbody>
       </table>
     </div>
@@ -117,7 +120,7 @@ export default async function (root) {
           <pre class="blur-sensitive">${fmt.htmlSafe(r.prompt_text || '')}</pre>
           <div class="flex" style="margin-top:12px;flex-wrap:wrap;gap:14px">
             <span class="muted">${fmt.ts(r.timestamp)}</span>
-            <span class="muted">${fmt.int(r.billable_tokens)} billable · ${fmt.int(r.cache_read_tokens)} cache rd · ~${fmt.usd4(r.estimated_cost_usd)} cache cost</span>
+            <span class="muted">${fmt.int(r.core_tokens)} core · ${fmt.int(r.cache_read_tokens)} cache rd · ~${fmt.usd4(r.estimated_cost_usd)} cache cost</span>
             <span class="spacer"></span>
             <a href="#/sessions/${encodeURIComponent(r.session_id)}">Open session →</a>
           </div>

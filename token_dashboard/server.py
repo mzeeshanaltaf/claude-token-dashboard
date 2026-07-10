@@ -22,6 +22,10 @@ from .scanner import scan_dir
 from .skills import cached_catalog
 
 
+# Windows' registry can map .svg to the wrong type (or none); pin it so the
+# favicon is served as image/svg+xml everywhere.
+mimetypes.add_type("image/svg+xml", ".svg")
+
 WEB_ROOT = Path(__file__).resolve().parent.parent / "web"
 PRICING_JSON = Path(__file__).resolve().parent.parent / "pricing.json"
 
@@ -106,11 +110,22 @@ def build_handler(db_path: str, projects_dir: str):
             if path == "/api/overview":
                 totals = overview_totals(db_path, since, until)
                 cost_usd = 0.0
+                cost_input = cost_output = cost_cache_read = cost_cache_create = 0.0
                 for m in model_breakdown(db_path, since, until):
                     c = cost_for(m["model"], m, pricing)
                     if c["usd"] is not None:
                         cost_usd += c["usd"]
+                        bd = c["breakdown"]
+                        cost_input += bd.get("input", 0.0)
+                        cost_output += bd.get("output", 0.0)
+                        cost_cache_read += bd.get("cache_read", 0.0)
+                        cost_cache_create += (bd.get("cache_create_5m", 0.0)
+                                              + bd.get("cache_create_1h", 0.0))
                 totals["cost_usd"] = round(cost_usd, 4)
+                totals["cost_input_usd"] = round(cost_input, 4)
+                totals["cost_output_usd"] = round(cost_output, 4)
+                totals["cost_cache_read_usd"] = round(cost_cache_read, 4)
+                totals["cost_cache_create_usd"] = round(cost_cache_create, 4)
                 return _send_json(self, totals)
             if path == "/api/prompts":
                 limit = _clamp_limit(qs.get("limit", ["50"])[0], 50)
@@ -237,7 +252,7 @@ def _scan_loop(db_path: str, projects_dir: str, interval: float = 30.0):
     while True:
         try:
             n = scan_dir(projects_dir, db_path)
-            if n["messages"] > 0:
+            if n["messages"] > 0 or n.get("titles", 0) > 0:
                 EVENTS.put({"type": "scan", "n": n, "ts": time.time()})
         except Exception as e:
             EVENTS.put({"type": "error", "message": str(e)})

@@ -8,7 +8,7 @@ export default async function (root) {
 
 async function renderList(root) {
   const rows = await api('/api/projects');
-  let sortCol = 'billable_tokens', sortDir = -1;
+  let sortCol = 'core_tokens', sortDir = -1;
 
   function render() {
     const sorted = [...rows].sort((a, b) => {
@@ -28,19 +28,19 @@ async function renderList(root) {
             <th>project</th>
             ${th('sessions', 'sessions', 'num ')}
             ${th('turns', 'turns', 'num ')}
-            ${th('billable_tokens', 'billable tokens', 'num ')}
+            ${th('core_tokens', 'core tokens', 'num ')}
             <th class="num">cache reads</th>
             ${th('estimated_cost_usd', 'est. cost', 'num ')}
           </tr></thead>
           <tbody>
             ${sorted.map(r => `
               <tr>
-                <td title="${fmt.htmlSafe(r.project_slug)}">
+                <td class="blur-sensitive" title="${fmt.htmlSafe(r.project_slug)}">
                   <a href="#/projects/${encodeURIComponent(r.project_slug)}">${fmt.htmlSafe(r.project_name || r.project_slug)}</a>
                 </td>
                 <td class="num">${fmt.int(r.sessions)}</td>
                 <td class="num">${fmt.int(r.turns)}</td>
-                <td class="num">${fmt.int(r.billable_tokens)}</td>
+                <td class="num">${fmt.int(r.core_tokens)}</td>
                 <td class="num">${fmt.int(r.cache_read_tokens)}</td>
                 <td class="num mono">${fmt.usd(r.estimated_cost_usd)}</td>
               </tr>`).join('')}
@@ -77,17 +77,17 @@ async function renderProject(root, slug) {
   root.innerHTML = `
     <div class="card">
       <h2 style="display:flex;align-items:center">
-        <span>${fmt.htmlSafe(name)}</span>
+        <span class="blur-sensitive">${fmt.htmlSafe(name)}</span>
         <span class="spacer"></span>
         <a href="#/projects" class="muted">← all projects</a>
       </h2>
-      <div class="muted" style="font-family:var(--mono);font-size:12px" title="project slug">${fmt.htmlSafe(slug)}</div>
+      <div class="muted blur-sensitive" style="font-family:var(--mono);font-size:12px" title="project slug">${fmt.htmlSafe(slug)}</div>
     </div>
 
     <div class="row cols-5" style="margin-top:16px">
       ${kpi('Sessions',        fmt.int(summary.sessions),                fmt.int(summary.sessions))}
       ${kpi('Turns',           fmt.int(summary.turns),                   fmt.int(summary.turns))}
-      ${kpi('Billable tokens', fmt.compact(summary.billable_tokens),     fmt.int(summary.billable_tokens) + ' tokens')}
+      ${kpi('Core tokens',     fmt.compact(summary.core_tokens),         fmt.int(summary.core_tokens) + ' tokens')}
       ${kpi('Cache reads',     fmt.compact(summary.cache_read_tokens),   fmt.int(summary.cache_read_tokens) + ' tokens')}
       <div class="card kpi cost">
         <div class="label">Est. cost</div>
@@ -100,12 +100,13 @@ async function renderProject(root, slug) {
       ${sessions.length === 0
         ? `<p class="muted">No sessions found for this project.</p>`
         : `<table>
-          <thead><tr><th>started</th><th>ended</th><th class="num">turns</th><th class="num">tokens</th><th class="num">est. cost</th><th>session</th></tr></thead>
+          <thead><tr><th>started</th><th>ended</th><th>title</th><th class="num">turns</th><th class="num">tokens</th><th class="num">est. cost</th><th>session</th></tr></thead>
           <tbody>
             ${sessions.map(s => `
               <tr>
                 <td class="mono">${fmt.ts(s.started)}</td>
                 <td class="mono">${fmt.ts(s.ended)}</td>
+                <td class="blur-sensitive" title="${fmt.htmlSafe(s.title || '')}">${s.title ? fmt.htmlSafe(fmt.short(s.title, 60)) : '<span class="muted">—</span>'}</td>
                 <td class="num">${fmt.int(s.turns)}</td>
                 <td class="num">${fmt.int(s.tokens)}</td>
                 <td class="num mono">${fmt.usd(s.estimated_cost_usd)}</td>

@@ -12,11 +12,11 @@ export default async function (root) {
         <div class="tip">
           <div class="tip-head">
             <span class="badge">${fmt.htmlSafe(t.category)}</span>
-            <strong>${fmt.htmlSafe(t.title)}</strong>
+            <strong class="blur-sensitive">${fmt.htmlSafe(t.title)}</strong>
             <span class="spacer"></span>
             <button class="ghost" data-key="${fmt.htmlSafe(t.key)}">dismiss</button>
           </div>
-          <p class="tip-body">${fmt.htmlSafe(t.body)}</p>
+          <p class="tip-body blur-sensitive">${fmt.htmlSafe(t.body)}</p>
         </div>`).join('')}
     </div>`;
   root.querySelectorAll('button[data-key]').forEach(b => {

@@ -6,9 +6,12 @@ export default async function (root) {
   return renderSession(root, id);
 }
 
+const PAGE_SIZES = [25, 50, 100, 200];
+
 async function renderList(root) {
-  const list = await api('/api/sessions?limit=100');
+  const list = await api('/api/sessions?limit=1000');
   let sortCol = 'started', sortDir = -1;
+  let page = 1, pageSize = 25;
 
   function render() {
     const sorted = [...list].sort((a, b) => {
@@ -16,6 +19,11 @@ async function renderList(root) {
       if (av == null) return 1; if (bv == null) return -1;
       return (av < bv ? -1 : av > bv ? 1 : 0) * sortDir;
     });
+    const total = sorted.length;
+    const pages = Math.max(1, Math.ceil(total / pageSize));
+    if (page > pages) page = pages;
+    const start = (page - 1) * pageSize;
+    const pageRows = sorted.slice(start, start + pageSize);
     const th = (col, label, cls = '') =>
       `<th class="${cls}sortable" data-col="${col}">${label}${col === sortCol ? (sortDir > 0 ? ' ↑' : ' ↓') : ''}</th>`;
 
@@ -26,31 +34,59 @@ async function renderList(root) {
           <thead><tr>
             ${th('started', 'started')}
             <th>project</th>
+            ${th('title', 'title')}
             ${th('turns', 'turns', 'num ')}
             ${th('tokens', 'tokens', 'num ')}
             ${th('estimated_cost_usd', 'est. cost', 'num ')}
             <th>session</th>
           </tr></thead>
           <tbody>
-            ${sorted.map(s => `
+            ${pageRows.map(s => `
               <tr>
                 <td class="mono">${fmt.ts(s.started)}</td>
-                <td title="${fmt.htmlSafe(s.project_slug)}">${fmt.htmlSafe(s.project_name || s.project_slug)}</td>
+                <td class="blur-sensitive" title="${fmt.htmlSafe(s.project_slug)}">${fmt.htmlSafe(s.project_name || s.project_slug)}</td>
+                <td class="blur-sensitive" title="${fmt.htmlSafe(s.title || '')}">${s.title ? fmt.htmlSafe(fmt.short(s.title, 60)) : '<span class="muted">—</span>'}</td>
                 <td class="num">${fmt.int(s.turns)}</td>
                 <td class="num">${fmt.int(s.tokens)}</td>
                 <td class="num mono">${fmt.usd(s.estimated_cost_usd)}</td>
                 <td><a href="#/sessions/${encodeURIComponent(s.session_id)}" class="mono">${fmt.htmlSafe(s.session_id.slice(0,8))}…</a></td>
-              </tr>`).join('')}
+              </tr>`).join('') || '<tr><td colspan="7" class="muted">no sessions</td></tr>'}
           </tbody>
         </table>
+        <div class="pager">
+          <span class="count">${total ? `Showing ${start + 1}–${Math.min(start + pageSize, total)} of ${total}` : '0 sessions'}</span>
+          <span class="spacer"></span>
+          <label class="count">Rows
+            <select id="page-size">${PAGE_SIZES.map(n => `<option value="${n}" ${n === pageSize ? 'selected' : ''}>${n}</option>`).join('')}</select>
+          </label>
+          <button data-page="prev" ${page <= 1 ? 'disabled' : ''}>← Prev</button>
+          <span class="count">Page ${page} / ${pages}</span>
+          <button data-page="next" ${page >= pages ? 'disabled' : ''}>Next →</button>
+        </div>
       </div>`;
 
     root.querySelectorAll('th.sortable').forEach(el => {
       el.addEventListener('click', () => {
         if (sortCol === el.dataset.col) sortDir *= -1;
         else { sortCol = el.dataset.col; sortDir = -1; }
+        page = 1;
         render();
       });
+    });
+
+    root.querySelectorAll('button[data-page]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        page += btn.dataset.page === 'next' ? 1 : -1;
+        if (page < 1) page = 1;
+        render();
+      });
+    });
+
+    const sizeSel = root.querySelector('#page-size');
+    if (sizeSel) sizeSel.addEventListener('change', () => {
+      pageSize = Number(sizeSel.value) || 25;
+      page = 1;
+      render();
     });
   }
 
@@ -75,16 +111,18 @@ async function renderSession(root, id) {
   const project = base || slug;
   const started = (turns[0] && turns[0].timestamp) || '';
   const ended = (turns[turns.length-1] && turns[turns.length-1].timestamp) || '';
+  const title = (turns.find(t => t.title) || {}).title || '';
 
   root.innerHTML = `
     <div class="card">
       <h2 style="display:flex;align-items:center">
-        <span>Session ${fmt.htmlSafe(id.slice(0,8))}…</span>
+        <span class="blur-sensitive">${title ? fmt.htmlSafe(title) : `Session ${fmt.htmlSafe(id.slice(0,8))}…`}</span>
         <span class="spacer"></span>
         <a href="#/sessions" class="muted">← all sessions</a>
       </h2>
       <div class="flex muted" style="font-family:var(--mono);font-size:12px;flex-wrap:wrap;gap:14px">
-        <span>${fmt.htmlSafe(project)}</span>
+        <span class="blur-sensitive">${fmt.htmlSafe(project)}</span>
+        ${title ? `<span title="session id">${fmt.htmlSafe(id.slice(0,8))}…</span>` : ''}
         <span>${fmt.ts(started)} → ${fmt.ts(ended)}</span>
         <span>${turns.length} records</span>
         <span>${fmt.int(totalIn)} in · ${fmt.int(totalOut)} out · ${fmt.int(totalCacheRd)} cache rd</span>

@@ -63,6 +63,11 @@ CREATE INDEX IF NOT EXISTS idx_tools_session ON tool_calls(session_id);
 CREATE INDEX IF NOT EXISTS idx_tools_name    ON tool_calls(tool_name);
 CREATE INDEX IF NOT EXISTS idx_tools_target  ON tool_calls(target);
 
+CREATE TABLE IF NOT EXISTS session_titles (
+  session_id  TEXT PRIMARY KEY,
+  title       TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS plan (
   k TEXT PRIMARY KEY,
   v TEXT
@@ -84,6 +89,7 @@ def init_db(path: Union[str, Path]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(path) as c:
         _migrate_add_message_id(c)
+        _migrate_backfill_session_titles(c)
         c.executescript(SCHEMA)
 
 
@@ -108,6 +114,30 @@ def _migrate_add_message_id(conn) -> None:
     conn.execute("DELETE FROM tool_calls")
     conn.execute("DELETE FROM files")
     conn.commit()
+
+
+def _migrate_backfill_session_titles(conn) -> None:
+    """Reset file offsets so existing transcripts replay and titles backfill.
+
+    Why: session titles live in `ai-title` records already inside JSONL files
+    the scanner read to EOF. The scanner is incremental (tracks each file's
+    byte offset), so without this the titles for existing sessions would never
+    be ingested. When session_titles is absent (first run on the new code),
+    clear the files high-water marks so the next scan re-reads every JSONL.
+    How to apply: message/tool rows replay idempotently (INSERT OR REPLACE on
+    uuid, per-uuid tool_calls delete), so a full replay duplicates nothing.
+    """
+    has_titles = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='session_titles'"
+    ).fetchone()
+    if has_titles:
+        return
+    has_files = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='files'"
+    ).fetchone()
+    if has_files:
+        conn.execute("DELETE FROM files")
+        conn.commit()
 
 
 @contextmanager
@@ -207,20 +237,22 @@ def expensive_prompts(db_path, limit: int = 50, sort: str = "tokens",
                       since=None, until=None) -> list:
     """User prompt joined with the immediately-following assistant turn's tokens.
 
-    sort="tokens" (default) → largest billable first.
+    sort="tokens" (default) → largest core-token count first.
     sort="recent"           → newest first.
     """
-    order = "u.timestamp DESC" if sort == "recent" else "billable_tokens DESC"
+    order = "u.timestamp DESC" if sort == "recent" else "core_tokens DESC"
     rng, rng_args = _range_clause(since, until, col="u.timestamp")
     sql = f"""
       SELECT u.uuid AS user_uuid, u.session_id, u.project_slug, u.timestamp,
              u.prompt_text, u.prompt_chars,
              a.uuid AS assistant_uuid, a.model,
              COALESCE(a.input_tokens,0)+COALESCE(a.output_tokens,0)
-               +COALESCE(a.cache_create_5m_tokens,0)+COALESCE(a.cache_create_1h_tokens,0) AS billable_tokens,
-             COALESCE(a.cache_read_tokens,0) AS cache_read_tokens
+               +COALESCE(a.cache_create_5m_tokens,0)+COALESCE(a.cache_create_1h_tokens,0) AS core_tokens,
+             COALESCE(a.cache_read_tokens,0) AS cache_read_tokens,
+             t.title AS title
         FROM messages u
         JOIN messages a ON a.parent_uuid = u.uuid AND a.type='assistant'
+        LEFT JOIN session_titles t ON t.session_id = u.session_id
        WHERE u.type='user' AND u.prompt_text IS NOT NULL {rng}
        ORDER BY {order}
        LIMIT ?
@@ -238,12 +270,12 @@ def project_summary(db_path, since=None, until=None) -> list:
              COALESCE(SUM(input_tokens), 0)  AS input_tokens,
              COALESCE(SUM(output_tokens), 0) AS output_tokens,
              SUM(input_tokens)+SUM(output_tokens)
-               +SUM(cache_create_5m_tokens)+SUM(cache_create_1h_tokens) AS billable_tokens,
+               +SUM(cache_create_5m_tokens)+SUM(cache_create_1h_tokens) AS core_tokens,
              SUM(cache_read_tokens) AS cache_read_tokens
         FROM messages m
        WHERE 1=1 {rng}
        GROUP BY project_slug
-       ORDER BY billable_tokens DESC
+       ORDER BY core_tokens DESC
     """
     with connect(db_path) as c:
         rows = [dict(r) for r in c.execute(sql, args)]
@@ -274,13 +306,15 @@ def tool_token_breakdown(db_path, since=None, until=None) -> list:
 def recent_sessions(db_path, limit: int = 20, since=None, until=None) -> list:
     rng, args = _range_clause(since, until)
     sql = f"""
-      SELECT session_id, project_slug,
-             MIN(timestamp) AS started, MAX(timestamp) AS ended,
-             SUM(CASE WHEN type='user' THEN 1 ELSE 0 END) AS turns,
-             SUM(input_tokens)+SUM(output_tokens) AS tokens
+      SELECT m.session_id AS session_id, m.project_slug AS project_slug,
+             MIN(m.timestamp) AS started, MAX(m.timestamp) AS ended,
+             SUM(CASE WHEN m.type='user' THEN 1 ELSE 0 END) AS turns,
+             SUM(m.input_tokens)+SUM(m.output_tokens) AS tokens,
+             t.title AS title
         FROM messages m
+        LEFT JOIN session_titles t ON t.session_id = m.session_id
        WHERE 1=1 {rng}
-       GROUP BY session_id
+       GROUP BY m.session_id
        ORDER BY ended DESC
        LIMIT ?
     """
@@ -302,13 +336,16 @@ def recent_sessions(db_path, limit: int = 20, since=None, until=None) -> list:
 
 def session_turns(db_path, session_id: str) -> list:
     sql = """
-      SELECT uuid, parent_uuid, type, timestamp, model, is_sidechain, agent_id,
-             input_tokens, output_tokens, cache_read_tokens,
-             cache_create_5m_tokens, cache_create_1h_tokens,
-             prompt_text, prompt_chars, tool_calls_json, project_slug, cwd
-        FROM messages
-       WHERE session_id = ?
-       ORDER BY timestamp ASC
+      SELECT m.uuid, m.parent_uuid, m.type, m.timestamp, m.model,
+             m.is_sidechain, m.agent_id,
+             m.input_tokens, m.output_tokens, m.cache_read_tokens,
+             m.cache_create_5m_tokens, m.cache_create_1h_tokens,
+             m.prompt_text, m.prompt_chars, m.tool_calls_json,
+             m.project_slug, m.cwd, t.title AS title
+        FROM messages m
+        LEFT JOIN session_titles t ON t.session_id = m.session_id
+       WHERE m.session_id = ?
+       ORDER BY m.timestamp ASC
     """
     with connect(db_path) as c:
         return [dict(r) for r in c.execute(sql, (session_id,))]
@@ -316,13 +353,15 @@ def session_turns(db_path, session_id: str) -> list:
 
 def project_sessions(db_path, slug: str) -> list:
     sql = """
-      SELECT session_id, project_slug,
-             MIN(timestamp) AS started, MAX(timestamp) AS ended,
-             SUM(CASE WHEN type='user' THEN 1 ELSE 0 END) AS turns,
-             SUM(input_tokens)+SUM(output_tokens) AS tokens
-        FROM messages
-       WHERE project_slug = ?
-       GROUP BY session_id
+      SELECT m.session_id AS session_id, m.project_slug AS project_slug,
+             MIN(m.timestamp) AS started, MAX(m.timestamp) AS ended,
+             SUM(CASE WHEN m.type='user' THEN 1 ELSE 0 END) AS turns,
+             SUM(m.input_tokens)+SUM(m.output_tokens) AS tokens,
+             t.title AS title
+        FROM messages m
+        LEFT JOIN session_titles t ON t.session_id = m.session_id
+       WHERE m.project_slug = ?
+       GROUP BY m.session_id
        ORDER BY ended DESC
     """
     with connect(db_path) as c:

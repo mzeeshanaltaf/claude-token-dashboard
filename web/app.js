@@ -44,6 +44,30 @@ export async function api(path, opts) {
 
 export const state = { plan: 'api', pricing: null };
 
+// Time-range preference, shared across tabs (Overview, Prompts). Defaults to
+// "all" so every view shows all-time data unless the user narrows it.
+const RANGE_KEY = 'td.range';
+export function loadRange() {
+  try { return localStorage.getItem(RANGE_KEY) || 'all'; } catch { return 'all'; }
+}
+export function saveRange(key) {
+  try { localStorage.setItem(RANGE_KEY, key); } catch {}
+}
+
+const LOGO_SVG = `
+  <svg class="logo" viewBox="0 0 32 32" width="22" height="22" aria-hidden="true">
+    <defs>
+      <linearGradient id="td-logo-g" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#4A9EFF"/>
+        <stop offset="1" stop-color="#7C5CFF"/>
+      </linearGradient>
+    </defs>
+    <rect width="32" height="32" rx="7" fill="url(#td-logo-g)"/>
+    <rect x="6.5"  y="17" width="4.5" height="8"  rx="1.5" fill="#fff" opacity="0.95"/>
+    <rect x="13.75" y="12" width="4.5" height="13" rx="1.5" fill="#fff" opacity="0.95"/>
+    <rect x="21"   y="7"  width="4.5" height="18" rx="1.5" fill="#fff" opacity="0.95"/>
+  </svg>`;
+
 const ROUTES = {
   '/overview': () => import('/web/routes/overview.js'),
   '/prompts':  () => import('/web/routes/prompts.js'),
@@ -58,7 +82,7 @@ function buildTopbar() {
   const wrap = document.createElement('header');
   wrap.className = 'topbar';
   wrap.innerHTML = `
-    <div class="brand">Token Dashboard</div>
+    <div class="brand">${LOGO_SVG}<span>Token Dashboard</span></div>
     <nav>
       ${Object.keys(ROUTES).map(p => `<a href="#${p}" data-route="${p}">${p.slice(1)}</a>`).join('')}
     </nav>

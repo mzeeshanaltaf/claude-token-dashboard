@@ -41,10 +41,9 @@ header.topbar {
   font-weight: 600; letter-spacing: -0.01em; font-size: 14px;
   display: flex; align-items: center; gap: 8px;
 }
-.topbar .brand::before {
-  content: ""; display: inline-block; width: 8px; height: 8px;
-  background: var(--accent); border-radius: 2px;
-  box-shadow: 0 0 12px var(--accent);
+.topbar .brand .logo {
+  display: block; border-radius: 6px;
+  box-shadow: 0 0 14px rgba(74, 158, 255, 0.35);
 }
 .topbar nav { display: flex; gap: 2px; margin-left: 12px; }
 .topbar nav a {
@@ -164,6 +163,14 @@ button:hover, select:hover { border-color: var(--border-2); }
 button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 button.primary:hover { background: #5BA8FF; }
 button.ghost { background: transparent; color: var(--muted); }
+button:disabled { opacity: 0.4; cursor: default; }
+button:disabled:hover { border-color: var(--border); }
+
+/* pager */
+.pager { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.pager .count { color: var(--muted); font-size: 12px; }
+.pager button { padding: 4px 12px; font-size: 12px; }
+.pager select { padding: 4px 8px; font-size: 12px; }
 
 /* tip rows */
 .tip {

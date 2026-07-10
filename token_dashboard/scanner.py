@@ -28,6 +28,32 @@ INSERT INTO tool_calls (message_uuid, session_id, project_slug, tool_name, targe
 VALUES (:message_uuid, :session_id, :project_slug, :tool_name, :target, :result_tokens, :is_error, :timestamp)
 """
 
+UPSERT_TITLE = """
+INSERT OR REPLACE INTO session_titles (session_id, title) VALUES (?, ?)
+"""
+
+
+def _session_title(rec: dict) -> Optional[Tuple[str, str]]:
+    """Extract (session_id, title) from a title record, or None.
+
+    Claude Code emits standalone records (no top-level uuid) that carry the
+    session's auto-generated title. Newer builds use ``{"type":"ai-title",
+    "sessionId":..., "aiTitle":...}``; older ones a ``summary`` record. A
+    session accrues several as the title is refined — the last one in file
+    order wins, which the INSERT OR REPLACE upsert preserves.
+    """
+    if not isinstance(rec, dict):
+        return None
+    if rec.get("type") == "ai-title":
+        sid, title = rec.get("sessionId"), rec.get("aiTitle")
+    elif rec.get("type") == "summary":
+        sid, title = rec.get("sessionId"), rec.get("summary")
+    else:
+        return None
+    if isinstance(sid, str) and isinstance(title, str) and title.strip():
+        return sid, title.strip()
+    return None
+
 
 _TARGET_FIELDS = {
     "Read":      "file_path",
@@ -192,7 +218,7 @@ def scan_file(path: Path, project_slug: str, conn, start_byte: int = 0) -> dict:
     file's high-water mark so a line partially flushed at EOF gets re-read
     once it completes.
     """
-    msgs = tools = 0
+    msgs = tools = titles = 0
     end_offset = start_byte
     with open(path, "rb") as fb:
         if start_byte:
@@ -220,6 +246,12 @@ def scan_file(path: Path, project_slug: str, conn, start_byte: int = 0) -> dict:
             except json.JSONDecodeError:
                 end_offset = line_end
                 continue
+            title = _session_title(rec)
+            if title is not None:
+                conn.execute(UPSERT_TITLE, title)
+                titles += 1
+                end_offset = line_end
+                continue
             if not isinstance(rec, dict) or "uuid" not in rec or "type" not in rec:
                 end_offset = line_end
                 continue
@@ -239,12 +271,12 @@ def scan_file(path: Path, project_slug: str, conn, start_byte: int = 0) -> dict:
                 tools += 1
             msgs += 1
             end_offset = line_end
-    return {"messages": msgs, "tools": tools, "end_offset": end_offset}
+    return {"messages": msgs, "tools": tools, "titles": titles, "end_offset": end_offset}
 
 
 def scan_dir(projects_root: Union[str, Path], db_path: Union[str, Path]) -> dict:
     root = Path(projects_root)
-    totals = {"messages": 0, "tools": 0, "files": 0}
+    totals = {"messages": 0, "tools": 0, "titles": 0, "files": 0}
     if not root.is_dir():
         return totals
     with connect(db_path) as conn:
@@ -272,6 +304,7 @@ def scan_dir(projects_root: Union[str, Path], db_path: Union[str, Path]) -> dict
             )
             totals["messages"] += sub["messages"]
             totals["tools"]    += sub["tools"]
+            totals["titles"]   += sub["titles"]
             totals["files"]    += 1
         conn.commit()
     return totals

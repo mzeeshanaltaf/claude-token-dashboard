@@ -1,4 +1,4 @@
-import { api, fmt, state } from '/web/app.js';
+import { api, fmt, state, loadRange, saveRange } from '/web/app.js';
 import { barChart, donutChart, groupedBarChart, stackedBarChart } from '/web/charts.js';
 
 const RANGES = [
@@ -11,11 +11,12 @@ const RANGES = [
 function readRange() {
   const q = (location.hash.split('?')[1] || '');
   const m = /(?:^|&)range=([^&]+)/.exec(q);
-  const k = m && decodeURIComponent(m[1]);
-  return RANGES.find(r => r.key === k) || RANGES[1];
+  const k = (m && decodeURIComponent(m[1])) || loadRange();
+  return RANGES.find(r => r.key === k) || RANGES.find(r => r.key === 'all');
 }
 
 function writeRange(key) {
+  saveRange(key);
   const base = (location.hash.replace(/^#/, '').split('?')[0]) || '/overview';
   location.hash = '#' + base + '?range=' + encodeURIComponent(key);
 }
@@ -46,11 +47,17 @@ export default async function (root) {
   const cacheCreate =
     (totals.cache_create_5m_tokens || 0) +
     (totals.cache_create_1h_tokens || 0);
+  const totalTokens =
+    (totals.input_tokens || 0) +
+    (totals.output_tokens || 0) +
+    (totals.cache_read_tokens || 0) +
+    cacheCreate;
 
-  const kpi = (label, compactVal, fullVal, cls = '') => `
+  const kpi = (label, compactVal, fullVal, cls = '', sub = '') => `
     <div class="card kpi ${cls}">
       <div class="label">${label}</div>
       <div class="value" title="${fullVal}">${compactVal}</div>
+      ${sub ? `<div class="sub" title="estimated cost">${sub}</div>` : ''}
     </div>`;
 
   const rangeTabs = `
@@ -76,11 +83,12 @@ export default async function (root) {
         ${planSubtitle()}
       </div>
     </div>
-    <div class="row cols-4" style="margin-top:16px">
-      ${kpi('Input',        fmt.compact(totals.input_tokens),       fmt.int(totals.input_tokens) + ' tokens')}
-      ${kpi('Output',       fmt.compact(totals.output_tokens),      fmt.int(totals.output_tokens) + ' tokens')}
-      ${kpi('Cache read',   fmt.compact(totals.cache_read_tokens),  fmt.int(totals.cache_read_tokens) + ' tokens')}
-      ${kpi('Cache create', fmt.compact(cacheCreate),               fmt.int(cacheCreate) + ' tokens')}
+    <div class="row cols-5" style="margin-top:16px">
+      ${kpi('Total tokens', fmt.compact(totalTokens),               fmt.int(totalTokens) + ' tokens (input + output + cache read + cache create)', '', fmt.usd(totals.cost_usd))}
+      ${kpi('Input',        fmt.compact(totals.input_tokens),       fmt.int(totals.input_tokens) + ' tokens', '', fmt.usd(totals.cost_input_usd))}
+      ${kpi('Output',       fmt.compact(totals.output_tokens),      fmt.int(totals.output_tokens) + ' tokens', '', fmt.usd(totals.cost_output_usd))}
+      ${kpi('Cache read',   fmt.compact(totals.cache_read_tokens),  fmt.int(totals.cache_read_tokens) + ' tokens', '', fmt.usd(totals.cost_cache_read_usd))}
+      ${kpi('Cache create', fmt.compact(cacheCreate),               fmt.int(cacheCreate) + ' tokens', '', fmt.usd(totals.cost_cache_create_usd))}
     </div>
 
     <details class="card glossary" style="margin-top:16px">
@@ -92,7 +100,8 @@ export default async function (root) {
         <dt>Output tokens</dt><dd>The text Claude wrote back. Billed at the highest rate — usually the biggest cost driver per turn.</dd>
         <dt>Cache read</dt><dd>Tokens Claude re-used from a cache (your CLAUDE.md, previously-read files, the conversation so far). ~10× cheaper than fresh input. High cache-read counts = good cost hygiene.</dd>
         <dt>Cache create</dt><dd>Writing something into the cache for the first time. One-time cost; pays off on the next turn.</dd>
-        <dt>Billable tokens</dt><dd>Input + Output + Cache create. Cache reads are billed separately (and much cheaper).</dd>
+        <dt>Total tokens</dt><dd>Every token that moved: Input + Output + Cache read + Cache create. This <b>includes cache reads</b>, so it's much larger than core tokens (cache reads usually dominate). Useful as a raw volume measure, not a cost measure.</dd>
+        <dt>Core tokens</dt><dd>Input + Output + Cache create — a proxy for where your spend concentrates. Cache reads <b>are</b> billed too (about 10× cheaper), but they're excluded from this count because their sheer volume would swamp it. For actual spend see <b>Est. cost</b>; for raw volume see <b>Total tokens</b>.</dd>
       </dl>
     </details>
 
@@ -113,7 +122,7 @@ export default async function (root) {
       <div class="card"><h3>Tokens by project</h3><div id="ch-projects" style="height:320px"></div></div>
       <div class="card">
         <h3>Token usage by model</h3>
-        <p class="muted" style="margin:-4px 0 4px;font-size:12px">Share of billable tokens per Claude model.</p>
+        <p class="muted" style="margin:-4px 0 4px;font-size:12px">Share of core tokens per Claude model.</p>
         <div id="ch-model" style="height:300px"></div>
       </div>
     </div>
@@ -128,7 +137,7 @@ export default async function (root) {
             ${sessions.map(s => `
               <tr>
                 <td class="mono">${fmt.ts(s.started)}</td>
-                <td><a href="#/sessions/${encodeURIComponent(s.session_id)}">${fmt.htmlSafe(s.project_name || s.project_slug)}</a></td>
+                <td class="blur-sensitive"><a href="#/sessions/${encodeURIComponent(s.session_id)}">${fmt.htmlSafe(s.project_name || s.project_slug)}</a></td>
                 <td class="num">${fmt.compact(s.tokens)}</td>
               </tr>`).join('') || '<tr><td colspan="3" class="muted">no sessions in this range</td></tr>'}
           </tbody>
@@ -142,7 +151,7 @@ export default async function (root) {
     btn.addEventListener('click', () => writeRange(btn.dataset.range));
   });
 
-  // Your daily work — billable tokens (input + output + cache create)
+  // Your daily work — core tokens (input + output + cache create)
   stackedBarChart(document.getElementById('ch-daily-billable'), {
     categories: daily.map(d => d.day),
     series: [
@@ -171,16 +180,32 @@ export default async function (root) {
 
   // tokens by project — input vs output
   const topProjects = projects.slice(0, 8);
-  groupedBarChart(document.getElementById('ch-projects'), {
-    categories: topProjects.map(p => {
-      const name = p.project_name || p.project_slug;
-      return name.length > 20 ? name.slice(0, 19) + '…' : name;
-    }),
+  const projectLabels = topProjects.map(p => {
+    const name = p.project_name || p.project_slug;
+    return name.length > 20 ? name.slice(0, 19) + '…' : name;
+  });
+  const projChartEl = document.getElementById('ch-projects');
+  const projChart = groupedBarChart(projChartEl, {
+    categories: projectLabels,
     series: [
       { name: 'input',  values: topProjects.map(p => p.input_tokens  || 0), color: '#4A9EFF' },
       { name: 'output', values: topProjects.map(p => p.output_tokens || 0), color: '#7C5CFF' },
     ],
   });
+
+  // Blur only the project-name axis labels under Cmd/Ctrl+B, not the whole chart.
+  // The SVG renderer emits each label as a <text> node whose content is the
+  // project name, so we tag those nodes and let the existing privacy CSS blur them.
+  const markProjectLabels = () => {
+    const svg = projChartEl.querySelector('svg');
+    if (!svg) return;
+    const names = new Set(projectLabels);
+    svg.querySelectorAll('text').forEach(t => {
+      if (names.has(t.textContent)) t.classList.add('blur-sensitive');
+    });
+  };
+  projChart.on('finished', markProjectLabels);
+  markProjectLabels();
 
   // top tools
   const topTools = tools.slice(0, 8);

@@ -4,9 +4,7 @@ A local dashboard that reads the JSONL transcripts Claude Code writes to `~/.cla
 
 **Everything runs locally.** No data leaves your machine — no telemetry, no API calls for your data, no login.
 
-![Overview tab — totals and daily charts](docs/images/dashboard-overview-top.jpg)
-
-![Overview tab — per-project, per-model, top tools, recent sessions](docs/images/dashboard-overview-bottom.jpg)
+![Overview tab — KPI cards with per-category costs, daily charts, per-project and per-model breakdowns](docs/images/dashboard_overview.png)
 
 ## What this is useful for
 
@@ -89,19 +87,23 @@ Change the port: `PORT=9000 python3 cli.py dashboard`.
 
 The dashboard is a single page with a hash-router tab bar across the top. Each tab is backed by its own JSON API under `/api/`:
 
-- **Overview** — KPI cards for total projects, sessions, turns, estimated cost, and all token categories (input / output / cache read / cache create). Daily work and cache-read charts, tokens-by-project, token share by model, top tools by call count, and recent sessions. Supports 7d / 30d / 90d / All time ranges. This is the landing tab.
-- **Prompts** — user prompts filterable by date range (7d / 30d / 90d / All, default 30d) and sortable by most tokens or most recent. Click any row to expand the full prompt text, token details, and a link to the originating session.
+- **Overview** — KPI cards for total projects, sessions, turns, estimated cost, and all token categories (input / output / cache read / cache create). Each token card also shows its own estimated cost, so you can see at a glance where your spend concentrates. Daily work and cache-read charts, tokens-by-project, token share by model, top tools by call count, and recent sessions. Supports 7d / 30d / 90d / All time ranges. This is the landing tab.
+- **Prompts** — user prompts filterable by date range (7d / 30d / 90d / All, default All; the range is shared with the Overview tab) and sortable by most tokens or most recent. Click any row to expand the full prompt text, token details, and a link to the originating session.
 - **Sessions** — list of sessions with sortable columns (started, turns, tokens, estimated cost). Click a session ID to open the turn-by-turn detail view, where every turn shows its local timestamp, model, token counts, and a clickable prompt/tools cell that expands to the full text in a modal.
-- **Projects** — per-project comparison with sortable columns (sessions, turns, billable tokens, estimated cost). Click any project name to open a dedicated project page: a KPI summary (total sessions, turns, billable tokens, cache reads, and estimated cost) above all its sessions, each showing started/ended times, turns, tokens, and estimated cost. Each session links directly to its turn-by-turn detail view.
+- **Projects** — per-project comparison with sortable columns (sessions, turns, core tokens, estimated cost). Click any project name to open a dedicated project page: a KPI summary (total sessions, turns, core tokens, cache reads, and estimated cost) above all its sessions, each showing started/ended times, turns, tokens, and estimated cost. Each session links directly to its turn-by-turn detail view.
 - **Skills** — which skills you invoke most often, and (where we can measure them) their token cost. See [limitations](docs/KNOWN_LIMITATIONS.md#skills-token-counts-are-partial).
 - **Tips** — rule-based suggestions for reducing token usage (repeated file reads, oversized tool results, low cache-hit rate, etc.).
 - **Settings** — switch pricing between API / Pro / Max / Max-20x so cost figures everywhere else reflect your actual plan.
 
 The Overview tab also has a built-in "What do these numbers mean?" panel that explains input/output/cache tokens in plain English.
 
+![Projects tab — per-project comparison with estimated cost](docs/images/dashboard_projects.png)
+
+![Sessions tab — sortable session list with local timestamps and estimated cost](docs/images/dashboard_sessions.png)
+
 ### Privacy controls
 
-Press **Cmd+B** (macOS) or **Ctrl+B** (Windows/Linux) on any tab to blur all prompt text and project names — useful when sharing your screen.
+Press **Cmd+B** (macOS) or **Ctrl+B** (Windows/Linux) on any tab to blur all prompt text and project names — useful when sharing your screen. On the Overview "Tokens by project" chart this blurs only the project-name labels, leaving the bars and axes readable.
 
 ## Troubleshooting
 
@@ -144,10 +146,12 @@ This project is a fork of [nateherkai/token-dashboard](https://github.com/natehe
 
 - In Projects section, added the support of sortable columns and clicking on project opens the details page which show session details associated with the project
 - In Overview section, added Projects KPI
+- In Overview section, added per-category estimated cost to the Input / Output / Cache read / Cache create token cards
+- In Overview section, the Cmd/Ctrl+B privacy blur now blurs only the project-name labels on the "Tokens by project" chart instead of the whole chart
 - In Prompts section, added date range filter (7d, 30d, 90d, All)
 - In Sessions, added the support of sortable columns, local timestamps and clickable full text modal
 - Added an **Estimated Cost** column to the Sessions and Projects tables (and the project drill-down)
-- On the project detail page, added a KPI summary (sessions, turns, billable tokens, cache reads, estimated cost)
+- On the project detail page, added a KPI summary (sessions, turns, core tokens, cache reads, estimated cost)
 - Corrected the model pricing in [`pricing.json`](pricing.json) and added Claude Fable 5
 - Added a Windows launcher ([`start_dashboard.bat`](start_dashboard.bat))
 
