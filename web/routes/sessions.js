@@ -36,7 +36,11 @@ async function renderList(root) {
             <th>project</th>
             ${th('title', 'title')}
             ${th('turns', 'turns', 'num ')}
-            ${th('tokens', 'tokens', 'num ')}
+            ${th('input_tokens', 'input', 'num ')}
+            ${th('output_tokens', 'output', 'num ')}
+            <th class="num" title="Cache reads: tokens re-used from cache (~10× cheaper than input)">cache reads</th>
+            <th class="num" title="Cache writes: tokens newly stored in cache (5m or 1h TTL)">cache writes</th>
+            ${th('total_tokens', 'total tokens', 'num ')}
             ${th('estimated_cost_usd', 'est. cost', 'num ')}
             <th>session</th>
           </tr></thead>
@@ -47,10 +51,14 @@ async function renderList(root) {
                 <td class="blur-sensitive" title="${fmt.htmlSafe(s.project_slug)}">${fmt.htmlSafe(s.project_name || s.project_slug)}</td>
                 <td class="blur-sensitive" title="${fmt.htmlSafe(s.title || '')}">${s.title ? fmt.htmlSafe(fmt.short(s.title, 60)) : '<span class="muted">—</span>'}</td>
                 <td class="num">${fmt.int(s.turns)}</td>
-                <td class="num">${fmt.int(s.tokens)}</td>
+                <td class="num">${fmt.int(s.input_tokens)}</td>
+                <td class="num">${fmt.int(s.output_tokens)}</td>
+                <td class="num">${fmt.int(s.cache_read_tokens)}</td>
+                <td class="num" title="5m: ${fmt.int(s.cache_create_5m_tokens)} · 1h: ${fmt.int(s.cache_create_1h_tokens)}">${fmt.int(s.cache_write_tokens)}</td>
+                <td class="num">${fmt.int(s.total_tokens)}</td>
                 <td class="num mono">${fmt.usd(s.estimated_cost_usd)}</td>
                 <td><a href="#/sessions/${encodeURIComponent(s.session_id)}" class="mono">${fmt.htmlSafe(s.session_id.slice(0,8))}…</a></td>
-              </tr>`).join('') || '<tr><td colspan="7" class="muted">no sessions</td></tr>'}
+              </tr>`).join('') || '<tr><td colspan="11" class="muted">no sessions</td></tr>'}
           </tbody>
         </table>
         <div class="pager">
@@ -95,13 +103,15 @@ async function renderList(root) {
 
 async function renderSession(root, id) {
   const turns = await api('/api/sessions/' + encodeURIComponent(id));
-  let totalIn = 0, totalOut = 0, totalCacheRd = 0;
+  let totalIn = 0, totalOut = 0, totalCacheRd = 0, totalCache5m = 0, totalCache1h = 0;
   let modelCounts = {};
   for (const t of turns) {
     if (t.type !== 'assistant') continue;
     totalIn += t.input_tokens || 0;
     totalOut += t.output_tokens || 0;
     totalCacheRd += t.cache_read_tokens || 0;
+    totalCache5m += t.cache_create_5m_tokens || 0;
+    totalCache1h += t.cache_create_1h_tokens || 0;
     const m = t.model || 'unknown';
     modelCounts[m] = (modelCounts[m] || 0) + 1;
   }
@@ -125,14 +135,14 @@ async function renderSession(root, id) {
         ${title ? `<span title="session id">${fmt.htmlSafe(id.slice(0,8))}…</span>` : ''}
         <span>${fmt.ts(started)} → ${fmt.ts(ended)}</span>
         <span>${turns.length} records</span>
-        <span>${fmt.int(totalIn)} in · ${fmt.int(totalOut)} out · ${fmt.int(totalCacheRd)} cache rd</span>
+        <span>${fmt.int(totalIn)} in · ${fmt.int(totalOut)} out · ${fmt.int(totalCacheRd)} cache rd · ${fmt.int(totalCache5m)} cache create (5m) · ${fmt.int(totalCache1h)} cache create (1h)</span>
       </div>
     </div>
 
     <div class="card" style="margin-top:16px">
       <h3>Turn-by-turn</h3>
       <table>
-        <thead><tr><th>time</th><th>type</th><th>model</th><th class="blur-sensitive">prompt / tools</th><th class="num">in</th><th class="num">out</th><th class="num">cache rd</th></tr></thead>
+        <thead><tr><th>time</th><th>type</th><th>model</th><th class="blur-sensitive">prompt / tools</th><th class="num">in</th><th class="num">out</th><th class="num">cache rd</th><th class="num" title="Cache write, 5-minute TTL">cache wr (5m)</th><th class="num" title="Cache write, 1-hour TTL">cache wr (1h)</th></tr></thead>
         <tbody>
           ${turns.map((t, i) => {
             const tools = t.tool_calls_json ? JSON.parse(t.tool_calls_json) : [];
@@ -151,6 +161,8 @@ async function renderSession(root, id) {
               <td class="num">${fmt.int(t.input_tokens)}</td>
               <td class="num">${fmt.int(t.output_tokens)}</td>
               <td class="num">${fmt.int(t.cache_read_tokens)}</td>
+              <td class="num">${fmt.int(t.cache_create_5m_tokens)}</td>
+              <td class="num">${fmt.int(t.cache_create_1h_tokens)}</td>
             </tr>`;
           }).join('')}
         </tbody>

@@ -8,7 +8,7 @@ export default async function (root) {
 
 async function renderList(root) {
   const rows = await api('/api/projects');
-  let sortCol = 'core_tokens', sortDir = -1;
+  let sortCol = 'total_tokens', sortDir = -1;
 
   function render() {
     const sorted = [...rows].sort((a, b) => {
@@ -28,8 +28,11 @@ async function renderList(root) {
             <th>project</th>
             ${th('sessions', 'sessions', 'num ')}
             ${th('turns', 'turns', 'num ')}
-            ${th('core_tokens', 'core tokens', 'num ')}
-            <th class="num">cache reads</th>
+            ${th('input_tokens', 'input', 'num ')}
+            ${th('output_tokens', 'output', 'num ')}
+            <th class="num" title="Cache reads: tokens re-used from cache (~10× cheaper than input)">cache reads</th>
+            <th class="num" title="Cache writes: tokens newly stored in cache (5m or 1h TTL)">cache writes</th>
+            ${th('total_tokens', 'total tokens', 'num ')}
             ${th('estimated_cost_usd', 'est. cost', 'num ')}
           </tr></thead>
           <tbody>
@@ -40,8 +43,11 @@ async function renderList(root) {
                 </td>
                 <td class="num">${fmt.int(r.sessions)}</td>
                 <td class="num">${fmt.int(r.turns)}</td>
-                <td class="num">${fmt.int(r.core_tokens)}</td>
+                <td class="num">${fmt.int(r.input_tokens)}</td>
+                <td class="num">${fmt.int(r.output_tokens)}</td>
                 <td class="num">${fmt.int(r.cache_read_tokens)}</td>
+                <td class="num" title="5m: ${fmt.int(r.cache_create_5m_tokens)} · 1h: ${fmt.int(r.cache_create_1h_tokens)}">${fmt.int(r.cache_write_tokens)}</td>
+                <td class="num">${fmt.int(r.total_tokens)}</td>
                 <td class="num mono">${fmt.usd(r.estimated_cost_usd)}</td>
               </tr>`).join('')}
           </tbody>
@@ -68,10 +74,12 @@ async function renderProject(root, slug) {
   const summary = projects.find(p => p.project_slug === slug) || {};
   const name = (sessions[0] && sessions[0].project_name) || summary.project_name || slug;
 
-  const kpi = (label, val, full, cls = '') => `
+  const kpi = (label, val, full, cls = '', sub = '', detail = '') => `
     <div class="card kpi ${cls}">
       <div class="label">${label}</div>
       <div class="value" title="${full}">${val}</div>
+      ${sub ? `<div class="sub" title="estimated cost">${sub}</div>` : ''}
+      ${detail ? `<div class="sub">${detail}</div>` : ''}
     </div>`;
 
   root.innerHTML = `
@@ -84,15 +92,21 @@ async function renderProject(root, slug) {
       <div class="muted blur-sensitive" style="font-family:var(--mono);font-size:12px" title="project slug">${fmt.htmlSafe(slug)}</div>
     </div>
 
-    <div class="row cols-5" style="margin-top:16px">
+    <div class="row cols-4" style="margin-top:16px">
       ${kpi('Sessions',        fmt.int(summary.sessions),                fmt.int(summary.sessions))}
       ${kpi('Turns',           fmt.int(summary.turns),                   fmt.int(summary.turns))}
-      ${kpi('Core tokens',     fmt.compact(summary.core_tokens),         fmt.int(summary.core_tokens) + ' tokens')}
-      ${kpi('Cache reads',     fmt.compact(summary.cache_read_tokens),   fmt.int(summary.cache_read_tokens) + ' tokens')}
+      ${kpi('Total tokens',    fmt.compact(summary.total_tokens),        fmt.int(summary.total_tokens) + ' tokens (input + output + cache read + cache write)', '', fmt.usd(summary.estimated_cost_usd))}
       <div class="card kpi cost">
         <div class="label">Est. cost</div>
         <div class="value" title="${fmt.usd(summary.estimated_cost_usd)}">${fmt.usd(summary.estimated_cost_usd)}</div>
       </div>
+    </div>
+    <div class="row cols-4" style="margin-top:16px">
+      ${kpi('Input',        fmt.compact(summary.input_tokens),       fmt.int(summary.input_tokens) + ' tokens', '', fmt.usd(summary.cost_input_usd))}
+      ${kpi('Output',       fmt.compact(summary.output_tokens),      fmt.int(summary.output_tokens) + ' tokens', '', fmt.usd(summary.cost_output_usd))}
+      ${kpi('Cache reads',  fmt.compact(summary.cache_read_tokens),  fmt.int(summary.cache_read_tokens) + ' tokens', '', fmt.usd(summary.cost_cache_read_usd))}
+      ${kpi('Cache writes', fmt.compact(summary.cache_write_tokens), fmt.int(summary.cache_write_tokens) + ' tokens', '', fmt.usd(summary.cost_cache_write_usd),
+            `5m: ${fmt.compact(summary.cache_create_5m_tokens)} (${fmt.usd(summary.cost_cache_create_5m_usd)}) · 1h: ${fmt.compact(summary.cache_create_1h_tokens)} (${fmt.usd(summary.cost_cache_create_1h_usd)})`)}
     </div>
 
     <div class="card" style="margin-top:16px">

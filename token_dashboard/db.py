@@ -271,7 +271,13 @@ def project_summary(db_path, since=None, until=None) -> list:
              COALESCE(SUM(output_tokens), 0) AS output_tokens,
              SUM(input_tokens)+SUM(output_tokens)
                +SUM(cache_create_5m_tokens)+SUM(cache_create_1h_tokens) AS core_tokens,
-             SUM(cache_read_tokens) AS cache_read_tokens
+             COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
+             COALESCE(SUM(cache_create_5m_tokens), 0) AS cache_create_5m_tokens,
+             COALESCE(SUM(cache_create_1h_tokens), 0) AS cache_create_1h_tokens,
+             COALESCE(SUM(cache_create_5m_tokens), 0)+COALESCE(SUM(cache_create_1h_tokens), 0) AS cache_write_tokens,
+             COALESCE(SUM(input_tokens), 0)+COALESCE(SUM(output_tokens), 0)
+               +COALESCE(SUM(cache_read_tokens), 0)
+               +COALESCE(SUM(cache_create_5m_tokens), 0)+COALESCE(SUM(cache_create_1h_tokens), 0) AS total_tokens
         FROM messages m
        WHERE 1=1 {rng}
        GROUP BY project_slug
@@ -310,6 +316,15 @@ def recent_sessions(db_path, limit: int = 20, since=None, until=None) -> list:
              MIN(m.timestamp) AS started, MAX(m.timestamp) AS ended,
              SUM(CASE WHEN m.type='user' THEN 1 ELSE 0 END) AS turns,
              SUM(m.input_tokens)+SUM(m.output_tokens) AS tokens,
+             COALESCE(SUM(m.input_tokens), 0)  AS input_tokens,
+             COALESCE(SUM(m.output_tokens), 0) AS output_tokens,
+             COALESCE(SUM(m.cache_read_tokens), 0) AS cache_read_tokens,
+             COALESCE(SUM(m.cache_create_5m_tokens), 0) AS cache_create_5m_tokens,
+             COALESCE(SUM(m.cache_create_1h_tokens), 0) AS cache_create_1h_tokens,
+             COALESCE(SUM(m.cache_create_5m_tokens), 0)+COALESCE(SUM(m.cache_create_1h_tokens), 0) AS cache_write_tokens,
+             COALESCE(SUM(m.input_tokens), 0)+COALESCE(SUM(m.output_tokens), 0)
+               +COALESCE(SUM(m.cache_read_tokens), 0)
+               +COALESCE(SUM(m.cache_create_5m_tokens), 0)+COALESCE(SUM(m.cache_create_1h_tokens), 0) AS total_tokens,
              t.title AS title
         FROM messages m
         LEFT JOIN session_titles t ON t.session_id = m.session_id

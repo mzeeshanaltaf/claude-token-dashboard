@@ -53,11 +53,12 @@ export default async function (root) {
     (totals.cache_read_tokens || 0) +
     cacheCreate;
 
-  const kpi = (label, compactVal, fullVal, cls = '', sub = '') => `
+  const kpi = (label, compactVal, fullVal, cls = '', sub = '', detail = '') => `
     <div class="card kpi ${cls}">
       <div class="label">${label}</div>
       <div class="value" title="${fullVal}">${compactVal}</div>
       ${sub ? `<div class="sub" title="estimated cost">${sub}</div>` : ''}
+      ${detail ? `<div class="sub">${detail}</div>` : ''}
     </div>`;
 
   const rangeTabs = `
@@ -88,7 +89,8 @@ export default async function (root) {
       ${kpi('Input',        fmt.compact(totals.input_tokens),       fmt.int(totals.input_tokens) + ' tokens', '', fmt.usd(totals.cost_input_usd))}
       ${kpi('Output',       fmt.compact(totals.output_tokens),      fmt.int(totals.output_tokens) + ' tokens', '', fmt.usd(totals.cost_output_usd))}
       ${kpi('Cache read',   fmt.compact(totals.cache_read_tokens),  fmt.int(totals.cache_read_tokens) + ' tokens', '', fmt.usd(totals.cost_cache_read_usd))}
-      ${kpi('Cache create', fmt.compact(cacheCreate),               fmt.int(cacheCreate) + ' tokens', '', fmt.usd(totals.cost_cache_create_usd))}
+      ${kpi('Cache create', fmt.compact(cacheCreate),               fmt.int(cacheCreate) + ' tokens', '', fmt.usd(totals.cost_cache_create_usd),
+            `5m: ${fmt.compact(totals.cache_create_5m_tokens)} (${fmt.usd(totals.cost_cache_create_5m_usd)}) · 1h: ${fmt.compact(totals.cache_create_1h_tokens)} (${fmt.usd(totals.cost_cache_create_1h_usd)})`)}
     </div>
 
     <details class="card glossary" style="margin-top:16px">

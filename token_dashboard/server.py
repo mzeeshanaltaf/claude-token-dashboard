@@ -71,6 +71,23 @@ def _cost_by_key(model_rows, key: str, pricing: dict) -> dict:
     return costs
 
 
+def _cost_breakdown_by_key(model_rows, key: str, pricing: dict) -> dict:
+    """Sum per-model breakdown USD into {key_value: {input, output, cache_read,
+    cache_create_5m, cache_create_1h}} for the given rows."""
+    out: dict = {}
+    for m in model_rows:
+        c = cost_for(m["model"], m, pricing)
+        if c["usd"] is None:
+            continue
+        bd = out.setdefault(m[key], {
+            "input": 0.0, "output": 0.0, "cache_read": 0.0,
+            "cache_create_5m": 0.0, "cache_create_1h": 0.0,
+        })
+        for k, v in c["breakdown"].items():
+            bd[k] += v
+    return out
+
+
 def _serve_static(handler, rel: str) -> None:
     rel = rel.lstrip("/")
     p = (WEB_ROOT / rel).resolve()
@@ -110,7 +127,8 @@ def build_handler(db_path: str, projects_dir: str):
             if path == "/api/overview":
                 totals = overview_totals(db_path, since, until)
                 cost_usd = 0.0
-                cost_input = cost_output = cost_cache_read = cost_cache_create = 0.0
+                cost_input = cost_output = cost_cache_read = 0.0
+                cost_cache_create_5m = cost_cache_create_1h = 0.0
                 for m in model_breakdown(db_path, since, until):
                     c = cost_for(m["model"], m, pricing)
                     if c["usd"] is not None:
@@ -119,13 +137,15 @@ def build_handler(db_path: str, projects_dir: str):
                         cost_input += bd.get("input", 0.0)
                         cost_output += bd.get("output", 0.0)
                         cost_cache_read += bd.get("cache_read", 0.0)
-                        cost_cache_create += (bd.get("cache_create_5m", 0.0)
-                                              + bd.get("cache_create_1h", 0.0))
+                        cost_cache_create_5m += bd.get("cache_create_5m", 0.0)
+                        cost_cache_create_1h += bd.get("cache_create_1h", 0.0)
                 totals["cost_usd"] = round(cost_usd, 4)
                 totals["cost_input_usd"] = round(cost_input, 4)
                 totals["cost_output_usd"] = round(cost_output, 4)
                 totals["cost_cache_read_usd"] = round(cost_cache_read, 4)
-                totals["cost_cache_create_usd"] = round(cost_cache_create, 4)
+                totals["cost_cache_create_5m_usd"] = round(cost_cache_create_5m, 4)
+                totals["cost_cache_create_1h_usd"] = round(cost_cache_create_1h, 4)
+                totals["cost_cache_create_usd"] = round(cost_cache_create_5m + cost_cache_create_1h, 4)
                 return _send_json(self, totals)
             if path == "/api/prompts":
                 limit = _clamp_limit(qs.get("limit", ["50"])[0], 50)
@@ -142,13 +162,21 @@ def build_handler(db_path: str, projects_dir: str):
                 return _send_json(self, rows)
             if path == "/api/projects":
                 rows = project_summary(db_path, since, until)
-                costs = _cost_by_key(
-                    project_model_tokens(db_path, since, until),
-                    "project_slug", pricing,
-                )
+                model_rows = project_model_tokens(db_path, since, until)
+                costs = _cost_by_key(model_rows, "project_slug", pricing)
+                breakdowns = _cost_breakdown_by_key(model_rows, "project_slug", pricing)
                 for r in rows:
                     slug = r["project_slug"]
                     r["estimated_cost_usd"] = round(costs[slug], 4) if slug in costs else None
+                    bd = breakdowns.get(slug)
+                    r["cost_input_usd"] = round(bd["input"], 4) if bd else None
+                    r["cost_output_usd"] = round(bd["output"], 4) if bd else None
+                    r["cost_cache_read_usd"] = round(bd["cache_read"], 4) if bd else None
+                    r["cost_cache_create_5m_usd"] = round(bd["cache_create_5m"], 4) if bd else None
+                    r["cost_cache_create_1h_usd"] = round(bd["cache_create_1h"], 4) if bd else None
+                    r["cost_cache_write_usd"] = (
+                        round(bd["cache_create_5m"] + bd["cache_create_1h"], 4) if bd else None
+                    )
                 return _send_json(self, rows)
             if path == "/api/tools":
                 return _send_json(self, tool_token_breakdown(db_path, since, until))
