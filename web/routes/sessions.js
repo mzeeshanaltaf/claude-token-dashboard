@@ -104,6 +104,7 @@ async function renderList(root) {
 async function renderSession(root, id) {
   const turns = await api('/api/sessions/' + encodeURIComponent(id));
   let totalIn = 0, totalOut = 0, totalCacheRd = 0, totalCache5m = 0, totalCache1h = 0;
+  let costIn = 0, costOut = 0, costCacheRd = 0, costCache5m = 0, costCache1h = 0, costTotal = 0;
   let modelCounts = {};
   for (const t of turns) {
     if (t.type !== 'assistant') continue;
@@ -112,6 +113,12 @@ async function renderSession(root, id) {
     totalCacheRd += t.cache_read_tokens || 0;
     totalCache5m += t.cache_create_5m_tokens || 0;
     totalCache1h += t.cache_create_1h_tokens || 0;
+    costIn += t.cost_input_usd || 0;
+    costOut += t.cost_output_usd || 0;
+    costCacheRd += t.cost_cache_read_usd || 0;
+    costCache5m += t.cost_cache_create_5m_usd || 0;
+    costCache1h += t.cost_cache_create_1h_usd || 0;
+    costTotal += t.estimated_cost_usd || 0;
     const m = t.model || 'unknown';
     modelCounts[m] = (modelCounts[m] || 0) + 1;
   }
@@ -123,6 +130,13 @@ async function renderSession(root, id) {
   const ended = (turns[turns.length-1] && turns[turns.length-1].timestamp) || '';
   const title = (turns.find(t => t.title) || {}).title || '';
 
+  const kpi = (label, val, full, sub = '') => `
+    <div class="card kpi">
+      <div class="label">${label}</div>
+      <div class="value" title="${full}">${val}</div>
+      ${sub ? `<div class="sub">${sub}</div>` : ''}
+    </div>`;
+
   root.innerHTML = `
     <div class="card">
       <h2 style="display:flex;align-items:center">
@@ -133,10 +147,27 @@ async function renderSession(root, id) {
       <div class="flex muted" style="font-family:var(--mono);font-size:12px;flex-wrap:wrap;gap:14px">
         <span class="blur-sensitive">${fmt.htmlSafe(project)}</span>
         ${title ? `<span title="session id">${fmt.htmlSafe(id.slice(0,8))}…</span>` : ''}
-        <span>${fmt.ts(started)} → ${fmt.ts(ended)}</span>
-        <span>${turns.length} records</span>
-        <span>${fmt.int(totalIn)} in · ${fmt.int(totalOut)} out · ${fmt.int(totalCacheRd)} cache rd · ${fmt.int(totalCache5m)} cache create (5m) · ${fmt.int(totalCache1h)} cache create (1h)</span>
       </div>
+    </div>
+
+    <div class="row cols-4" style="margin-top:16px">
+      ${kpi('Started', fmt.ts(started), fmt.htmlSafe(started))}
+      ${kpi('Ended', fmt.ts(ended), fmt.htmlSafe(ended))}
+      ${kpi('Records', fmt.int(turns.length), fmt.int(turns.length))}
+      <div class="card kpi cost">
+        <div class="label">Total est. cost</div>
+        <div class="value" title="${fmt.usd(costTotal)}">${fmt.usd(costTotal)}</div>
+      </div>
+    </div>
+    <div class="row cols-4" style="margin-top:16px">
+      ${kpi('Input', fmt.compact(totalIn), fmt.int(totalIn) + ' tokens', fmt.usd(costIn))}
+      ${kpi('Output', fmt.compact(totalOut), fmt.int(totalOut) + ' tokens', fmt.usd(costOut))}
+      ${kpi('Cache reads', fmt.compact(totalCacheRd), fmt.int(totalCacheRd) + ' tokens', fmt.usd(costCacheRd))}
+      ${kpi('Cache writes', fmt.compact(totalCache5m + totalCache1h), fmt.int(totalCache5m + totalCache1h) + ' tokens', fmt.usd(costCache5m + costCache1h))}
+    </div>
+    <div class="row cols-2" style="margin-top:16px">
+      ${kpi('Cache create (5m)', fmt.compact(totalCache5m), fmt.int(totalCache5m) + ' tokens', fmt.usd(costCache5m))}
+      ${kpi('Cache create (1h)', fmt.compact(totalCache1h), fmt.int(totalCache1h) + ' tokens', fmt.usd(costCache1h))}
     </div>
 
     <div class="card" style="margin-top:16px">

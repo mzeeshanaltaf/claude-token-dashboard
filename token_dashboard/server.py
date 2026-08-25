@@ -211,7 +211,27 @@ def build_handler(db_path: str, projects_dir: str):
                 return _send_json(self, rows)
             if path.startswith("/api/sessions/"):
                 sid = path.rsplit("/", 1)[1]
-                return _send_json(self, session_turns(db_path, sid))
+                rows = session_turns(db_path, sid)
+                for r in rows:
+                    if r["type"] != "assistant" or not r["model"]:
+                        continue
+                    c = cost_for(r["model"], {
+                        "input_tokens": r["input_tokens"] or 0,
+                        "output_tokens": r["output_tokens"] or 0,
+                        "cache_read_tokens": r["cache_read_tokens"] or 0,
+                        "cache_create_5m_tokens": r["cache_create_5m_tokens"] or 0,
+                        "cache_create_1h_tokens": r["cache_create_1h_tokens"] or 0,
+                    }, pricing)
+                    if c["usd"] is None:
+                        continue
+                    bd = c["breakdown"]
+                    r["cost_input_usd"] = round(bd["input"], 6)
+                    r["cost_output_usd"] = round(bd["output"], 6)
+                    r["cost_cache_read_usd"] = round(bd["cache_read"], 6)
+                    r["cost_cache_create_5m_usd"] = round(bd["cache_create_5m"], 6)
+                    r["cost_cache_create_1h_usd"] = round(bd["cache_create_1h"], 6)
+                    r["estimated_cost_usd"] = round(c["usd"], 6)
+                return _send_json(self, rows)
             if path.startswith("/api/projects/") and path.endswith("/sessions"):
                 slug = unquote(path[len("/api/projects/"):-len("/sessions")])
                 rows = project_sessions(db_path, slug)
