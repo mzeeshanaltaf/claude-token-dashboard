@@ -45,3 +45,13 @@ python3 -m unittest discover tests        # all tests
 python3 cli.py dashboard --no-open        # start the server
 curl http://127.0.0.1:8080/api/overview   # sanity-check an endpoint
 ```
+
+## Git remotes
+
+This repo is a fork. `origin` points to the upstream `nateherkai/token-dashboard`, which is read-only for us (pushing there fails with a 403). Push to the fork instead — the `mzeeshanaltaf` remote (`mzeeshanaltaf/claude-token-dashboard`), which local `main` already tracks:
+
+```bash
+git push mzeeshanaltaf main   # or plain `git push`
+```
+
+Never push to `origin`.
