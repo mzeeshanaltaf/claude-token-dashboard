@@ -83,6 +83,18 @@ python3 cli.py dashboard --no-scan   # skip the initial scan (use cached DB only
 
 Change the port: `PORT=9000 python3 cli.py dashboard`.
 
+### Daily background scan (Windows)
+
+If you only open the dashboard occasionally, the startup scan has a lot of new transcript data to catch up on. A scheduled task can scan once a day instead, so the dashboard starts quickly:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install_daily_scan.ps1             # daily at 13:00
+powershell -ExecutionPolicy Bypass -File scripts\install_daily_scan.ps1 -At 09:30   # custom time
+powershell -ExecutionPolicy Bypass -File scripts\install_daily_scan.ps1 -Uninstall
+```
+
+The task runs `scripts/daily_scan.py` with `pythonw` (no console window) as your user. If the PC is off at the scheduled time, it runs once you're back. Results go to `~/.claude/token-dashboard-scan.log`. On macOS/Linux, use a cron entry instead: `0 13 * * * python3 /path/to/scripts/daily_scan.py`.
+
 ## The 7 tabs
 
 The dashboard is a single page with a hash-router tab bar across the top. Each tab is backed by its own JSON API under `/api/`:
