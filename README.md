@@ -152,7 +152,7 @@ This project is a fork of [nateherkai/token-dashboard](https://github.com/natehe
 - In Sessions, added the support of sortable columns, local timestamps and clickable full text modal
 - Added an **Estimated Cost** column to the Sessions and Projects tables (and the project drill-down)
 - On the project detail page, added a KPI summary (sessions, turns, core tokens, cache reads, estimated cost)
-- Corrected the model pricing in [`pricing.json`](pricing.json) and added Claude Fable 5
+- Corrected the model pricing in [`pricing.json`](pricing.json) and added Claude Fable 5, Fable 5.1, Mythos 5, Mythos 5.1, Opus 5.5 and Sonnet 5
 - Added a Windows launcher ([`start_dashboard.bat`](start_dashboard.bat))
 
 ## License
