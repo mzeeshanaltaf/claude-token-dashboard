@@ -65,7 +65,7 @@ python3 cli.py dashboard --projects-dir /path/to/projects --db /path/to/cache.db
 | `CLAUDE_PROJECTS_DIR` | `~/.claude/projects` | Where to scan for session JSONL files |
 | `TOKEN_DASHBOARD_DB` | `~/.claude/token-dashboard.db` | SQLite cache location |
 
-Pricing lives in [`pricing.json`](pricing.json). Edit it directly if model prices change or to add a new plan. Current rates are sourced from the [Anthropic pricing page](https://platform.claude.com/docs/en/about-claude/pricing).
+Pricing lives in [`pricing.json`](pricing.json). Edit it directly if model prices change or to add a new plan — the running server picks up edits on the next request, no restart needed (if the file is briefly invalid mid-save, the last good copy is used). Current rates are sourced from the [Anthropic pricing page](https://platform.claude.com/docs/en/about-claude/pricing).
 
 ## CLI reference
 
@@ -166,6 +166,7 @@ This project is a fork of [nateherkai/token-dashboard](https://github.com/natehe
 - On the project detail page, added a KPI summary (sessions, turns, core tokens, cache reads, estimated cost)
 - Corrected the model pricing in [`pricing.json`](pricing.json) and added Claude Fable 5, Fable 5.1, Mythos 5, Mythos 5.1, Opus 5.5 and Sonnet 5
 - Added a Windows launcher ([`start_dashboard.bat`](start_dashboard.bat))
+- Edits to [`pricing.json`](pricing.json) apply without restarting the server
 
 ## License
 

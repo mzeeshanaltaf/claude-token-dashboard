@@ -104,8 +104,32 @@ def _serve_static(handler, rel: str) -> None:
     handler.wfile.write(body)
 
 
+def _make_pricing_loader(path: Path):
+    """Return a callable that yields the current pricing.json contents.
+
+    Re-reads the file only when its mtime changes, so edits apply on the next
+    request without a server restart. If the file is briefly unreadable or
+    invalid (e.g. mid-save), the last good copy is served instead.
+    """
+    state = {"mtime": None, "data": None}
+
+    def get() -> dict:
+        try:
+            mtime = path.stat().st_mtime_ns
+            if mtime != state["mtime"] or state["data"] is None:
+                state["data"] = load_pricing(path)
+                state["mtime"] = mtime
+        except (OSError, ValueError):
+            if state["data"] is None:
+                raise
+        return state["data"]
+
+    return get
+
+
 def build_handler(db_path: str, projects_dir: str):
-    pricing = load_pricing(PRICING_JSON)
+    get_pricing = _make_pricing_loader(PRICING_JSON)
+    get_pricing()  # fail fast at startup if pricing.json is missing or invalid
 
     class H(http.server.BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
@@ -120,6 +144,7 @@ def build_handler(db_path: str, projects_dir: str):
             path = url.path
             since = qs.get("since", [None])[0]
             until = qs.get("until", [None])[0]
+            pricing = get_pricing()
             if path in ("/", "/index.html"):
                 return _serve_static(self, "index.html")
             if path.startswith("/web/"):

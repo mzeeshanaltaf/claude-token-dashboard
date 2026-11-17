@@ -9,7 +9,41 @@ import unittest
 import urllib.request
 
 from token_dashboard.db import init_db
-from token_dashboard.server import build_handler
+from pathlib import Path
+
+from token_dashboard.server import build_handler, _make_pricing_loader
+
+
+class PricingLoaderTests(unittest.TestCase):
+    def setUp(self):
+        self.path = Path(tempfile.mkdtemp()) / "pricing.json"
+
+    def _write(self, models, bump):
+        self.path.write_text(json.dumps({"models": models}), encoding="utf-8")
+        # Force a distinct mtime so the test doesn't depend on FS timestamp resolution.
+        st = self.path.stat()
+        os.utime(self.path, ns=(st.st_atime_ns, st.st_mtime_ns + bump))
+
+    def test_picks_up_edits_without_restart(self):
+        self._write({"a": 1}, 1_000_000)
+        get = _make_pricing_loader(self.path)
+        self.assertEqual(get()["models"], {"a": 1})
+        self._write({"a": 1, "b": 2}, 2_000_000)
+        self.assertEqual(get()["models"], {"a": 1, "b": 2})
+
+    def test_keeps_last_good_copy_when_file_is_invalid(self):
+        self._write({"a": 1}, 1_000_000)
+        get = _make_pricing_loader(self.path)
+        get()
+        self.path.write_text("{ not json", encoding="utf-8")
+        st = self.path.stat()
+        os.utime(self.path, ns=(st.st_atime_ns, st.st_mtime_ns + 5_000_000))
+        self.assertEqual(get()["models"], {"a": 1})
+
+    def test_raises_if_never_loaded_and_invalid(self):
+        self.path.write_text("{ not json", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            _make_pricing_loader(self.path)()
 
 
 def _free_port():
