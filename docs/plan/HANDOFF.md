@@ -20,7 +20,7 @@ Status values: `not-started` · `in-progress` · `blocked` · `done`
 ## Baton (replace this section at the end of every session)
 
 - **Current phase:** 02 is done. Next is 03.
-- **Last commit:** `143eed8 docs(plan): record phase 01 commit in handoff`. Phase 02's work is **uncommitted** until the user approves the suggested commit (see the session log).
+- **Last commit:** `2947df1 feat(collector): sqlite history migration with parity check and daily sync task` (phase 02), pushed to `mzeeshanaltaf/main`, plus a docs follow-up that records this hash.
 - **What works:**
   - the **real `claude_dashboard` schema holds the full history.** It was seeded from SQLite (all 30 parity checks matched) and is kept current by the daily task;
   - `collector/migrate_sqlite.py` and `claude-lens migrate-sqlite [--sqlite PATH] [--machine NAME] [--force] [--check-only] [--chunk N]`;
@@ -127,7 +127,7 @@ Add newest entries at the top, using this template:
   - `Get-ScheduledTask` for `Claude*` lists **only** `Claude Lens - Daily Sync`.
   - Row counts after the task: messages 235,835, tool_calls 159,637, session_titles 1,006, files 1,284, sessions 1,089, sync_runs 2.
   - The SQLite sha256, mtime and size are unchanged.
-- **Commit:** uncommitted. Suggested: `feat(collector): sqlite history migration with parity check and daily sync task`.
+- **Commit:** `2947df1 feat(collector): sqlite history migration with parity check and daily sync task`, pushed to `mzeeshanaltaf/main`.
 - **Gotchas:**
   - A pythonw path with spaces (`E:\Projects\Claude Code\…`) works fine as the task's `-Execute` without extra quoting.
   - The DB test suite is network-bound (≈5 min) and can hit a transient `OperationalError` in fixture setup. Rerun the file before you suspect the code.
