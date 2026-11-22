@@ -20,7 +20,7 @@ Status values: `not-started` · `in-progress` · `blocked` · `done`
 ## Baton (replace this section at the end of every session)
 
 - **Current phase:** 03 is done. Next is 04.
-- **Last commit:** `31f9f69 docs(plan): record phase 02 commit in handoff`. Phase 03 is **uncommitted** until the user approves (suggested message in the session log).
+- **Last commit:** `7b47238 feat(api): fastapi endpoints, pagination and single-admin auth on postgres` (phase 03), pushed to `mzeeshanaltaf/main`, plus a docs follow-up that records this hash. The untracked `frontend/` belongs to the phase 04 session and was left out.
 - **What works:**
   - `uv run uvicorn claude_lens.api.main:app --port 8000` serves every old endpoint from Postgres, plus `auth/*`, `settings`, `sync-status` and `health` (20 paths, all in `/docs`). The full list and shapes are in `backend/README.md` § API and `claude_lens/api/schemas.py`;
   - login via the `cl_session` cookie, the 7-day sliding expiry, the lockout (5 per (IP, username) per 15 min → 429), the CSRF guard, and `claude-lens set-password <user>`;
@@ -152,7 +152,7 @@ Add newest entries at the top, using this template:
   - **Totals vs the old app** (`python cli.py dashboard` on 8080, `range=all`, both freshly scanned): **all 15 fields identical**. cost_usd **6438.7082** = 6438.7082; sessions 1,090; projects 85; turns 98,948; input 2,361,224; output 64,235,228; cache_read 11,283,008,440; cache_5m 29,362,694; cache_1h 197,676,508; cache-create cost 1662.2358.
   - **Other endpoints, old vs new:** by-model (14), daily (210), tools (48), skills (55 rows, `tokens_per_call` equal), tips (3), plan + pricing, one session's 2,557 turns, and 200 sessions/prompts rows are all identical. The exceptions: this live session (scanned a few seconds apart), prompts' `estimated_cost_usd` (the fix), and `project_name` for 3 projects / 33 sessions (sorted-cwd fallback, see Decisions).
 - **Admin seeding (local):** the first API start set `ADMIN_USERNAME=admin` and `ADMIN_PASSWORD` as process env vars only (`.env.local` was not changed). The generated password was given to the user privately (it was kept in the session scratchpad); they should replace it with `uv run claude-lens set-password admin`. The real `users` table holds `admin`; `auth_sessions` is empty.
-- **Commit:** uncommitted. Suggested: `feat(api): fastapi endpoints, pagination and single-admin auth on postgres`.
+- **Commit:** `7b47238 feat(api): fastapi endpoints, pagination and single-admin auth on postgres`, pushed to `mzeeshanaltaf/main`.
 - **Gotchas:**
   - **pytest prints fixture values in tracebacks**: a teardown error dumped the full `DATABASE_URL` into the test output. Fixed by redacting `pg_url`'s repr. Never paste raw pytest failure output into docs.
   - Two stray test schemas (`claude_lens_test_74e57b2c`, `…_6d95f6f5`) were found and dropped. Only `claude_dashboard` remains.
