@@ -20,7 +20,7 @@ Status values: `not-started` · `in-progress` · `blocked` · `done`
 ## Baton (replace this section at the end of every session)
 
 - **Current phase:** 01 is done. Next is 02.
-- **Last commit:** `de5f5e7 feat(backend): claude-lens uv scaffold with ported pure modules` (phase 00). Phase 01's work is **uncommitted** until the user approves; suggested message: `feat(collector): postgres schema, migrations and batched ingest`.
+- **Last commit:** `3530e74 feat(collector): postgres schema, migrations and batched ingest` (phase 01), pushed to `mzeeshanaltaf/main`, plus a docs follow-up that records this hash.
 - **What works:**
   - `db/pool.py` (`connect()`, `make_pool()`, `set_search_path()`), `db/migrate.py` (`migrate(conn, schema)`, `applied_versions()`), and `db/migrations/001_init.sql` (all 10 tables plus `schema_migrations`);
   - `collector/ingest.py`: `scan(root, conn, machine, full=False, *, batch_lines=5000, progress=None)`;
@@ -108,7 +108,7 @@ Add newest entries at the top, using this template:
     - the uuid sets are identical.
   - **Exit check 2:** appended a copy of a real assistant line (new uuid, same `message.id`, `output_tokens` 999,999) and re-scanned. That scanned 1 file and 1 message. Exactly one row is left for `msg_011Cgv…`, and it's the new snapshot.
   - The exit-check schema was dropped afterwards. `pg_namespace` has no `claude%` schemas left, and `claude_dashboard` was never created.
-- **Commit:** uncommitted (waiting for user approval). Suggested: `feat(collector): postgres schema, migrations and batched ingest`.
+- **Commit:** `3530e74 feat(collector): postgres schema, migrations and batched ingest`, pushed to `mzeeshanaltaf/main`.
 - **Gotchas:**
   - **Postgres collation isn't byte order.** `ORDER BY model` sorts differently from SQLite, which broke a naive list comparison in the parity check. Phase 02's parity check and phase 03's ported query tests should compare as dicts/sets, or use `COLLATE "C"` where byte order matters.
   - `sum(bigint)` returns `numeric`, which psycopg gives back as `Decimal`. Cast (`::bigint`) or `int()` it before comparing or JSON-encoding.
