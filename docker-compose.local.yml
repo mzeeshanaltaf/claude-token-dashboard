@@ -1,0 +1,10 @@
+# Local smoke test only (never used by Coolify): publishes the frontend on
+# http://localhost:3002 and allows the session cookie over plain http.
+#   docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.local.yml up --build
+services:
+  backend:
+    environment:
+      COOKIE_SECURE: "false"
+  frontend:
+    ports:
+      - "127.0.0.1:3002:3000"

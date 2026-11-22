@@ -1,0 +1,33 @@
+# Claude Lens: FastAPI backend + Next.js frontend. Postgres is external (DATABASE_URL).
+#
+# Production (Coolify): the domain is attached to the `frontend` service only;
+# the backend is never published. Set the variables below in Coolify, never in the repo.
+# Local smoke test: docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.local.yml up --build
+
+services:
+  backend:
+    build:
+      context: ./backend
+    expose:
+      - "8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      DB_SCHEMA: ${DB_SCHEMA:-claude_dashboard}
+      # Only read while the users table is empty (first boot).
+      ADMIN_USERNAME: ${ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      TRUST_PROXY: ${TRUST_PROXY:-true}
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    expose:
+      - "3000"
+    environment:
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
