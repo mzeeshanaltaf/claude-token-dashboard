@@ -21,7 +21,10 @@ from ..db.migrate import migrate
 from ..db.pool import make_pool
 from . import auth
 from .deps import current_user
-from .routers import analytics, projects, prompts, sessions, settings as settings_router, tips
+from .routers import (
+    activity, analytics, export, projects, prompts, search, sessions,
+    settings as settings_router, tips, tools,
+)
 from .schemas import Health
 from .security import CSRFMiddleware, LoginLockout
 
@@ -73,7 +76,8 @@ def create_app(
 
     api.include_router(auth.router)
     protected = [Depends(current_user)]
-    for module in (analytics, projects, sessions, prompts, tips, settings_router):
+    for module in (analytics, activity, projects, sessions, prompts, tools, search, export,
+                   tips, settings_router):
         api.include_router(module.router, dependencies=protected,
                            responses={401: {"description": "not logged in"}})
     app.include_router(api)

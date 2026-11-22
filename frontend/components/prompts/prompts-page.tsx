@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 
 import { DataTable } from "@/components/data-table";
 import { ErrorState } from "@/components/error-state";
+import { ExportButton } from "@/components/export-button";
 import { FilterBar, ModelSelect, ProjectSelect, SearchBox } from "@/components/filters";
 import { ModelBadge } from "@/components/model-badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -123,6 +124,7 @@ export function PromptsPage() {
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
+        <ExportButton table="prompts" query={{ q, project, model, sort: t.sort, order: t.order }} />
       </FilterBar>
 
       {prompts.isError ? (

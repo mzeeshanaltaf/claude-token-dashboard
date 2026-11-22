@@ -13,7 +13,7 @@ import {
   type Updater,
 } from "@tanstack/react-table";
 import { ArrowDownIcon, ArrowUpIcon, ChevronLeftIcon, ChevronRightIcon, ChevronsUpDownIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { InfoTip } from "@/components/info-tip";
 import { Button } from "@/components/ui/button";
@@ -70,7 +70,14 @@ export function DataTable<T>({
   empty = "Nothing in this range.",
   className,
   rowClassName,
+  focusRow,
 }: {
+  /**
+   * Bring a row into view (client tables): switch to the page that holds it,
+   * scroll to it and flash it. A new `nonce` repeats the jump for the same id.
+   * Needs `getRowId`.
+   */
+  focusRow?: { id: string; nonce: number } | null;
   columns: ColumnDef<T, unknown>[];
   data: readonly T[] | undefined;
   server?: ServerTableState;
@@ -136,8 +143,32 @@ export function DataTable<T>({
   const rows = table.getRowModel().rows;
   const colCount = table.getVisibleLeafColumns().length;
 
+  // Jump to `focusRow`: pick its page while rendering (no effect → no extra
+  // paint on the wrong page), then scroll and flash once it's in the DOM.
+  const focusToken = focusRow ? `${focusRow.id}\u0000${focusRow.nonce}` : null;
+  const [pagedFor, setPagedFor] = useState<string | null>(null);
+  if (focusToken && focusToken !== pagedFor) {
+    setPagedFor(focusToken);
+    if (clientPageSize && !server) {
+      const idx = table.getPrePaginationRowModel().rows.findIndex((r) => r.id === focusRow!.id);
+      if (idx >= 0) setPagination((p) => ({ ...p, pageIndex: Math.floor(idx / p.pageSize) }));
+    }
+  }
+  const tableRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!focusRow) return;
+    const el = tableRef.current?.querySelector<HTMLElement>(`[data-row-id="${CSS.escape(focusRow.id)}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.focus({ preventScroll: true });
+    el.animate?.(
+      [{ backgroundColor: "color-mix(in oklab, var(--primary) 22%, transparent)" }, { backgroundColor: "transparent" }],
+      { duration: 1800, easing: "ease-out" },
+    );
+  }, [focusRow, pagination.pageIndex]);
+
   return (
-    <div className={cn("flex min-w-0 flex-col gap-3", className)}>
+    <div ref={tableRef} className={cn("flex min-w-0 flex-col gap-3", className)}>
       <div className={cn("overflow-hidden rounded-lg border transition-opacity", dim && "opacity-60")}>
         <Table>
           <TableHeader className="bg-muted/40">
@@ -198,6 +229,7 @@ export function DataTable<T>({
               rows.map((row) => (
                 <TableRow
                   key={row.id}
+                  data-row-id={row.id}
                   onClick={onRowClick ? () => onRowClick(row.original) : undefined}
                   onKeyDown={
                     onRowClick

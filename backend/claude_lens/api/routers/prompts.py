@@ -17,6 +17,17 @@ router = APIRouter(tags=["prompts"])
 PromptSort = Literal[tuple(q.PROMPT_SORTS)]  # type: ignore[valid-type]
 
 
+def prompts_with_cost(conn: psycopg.Connection, req: PageRequest, rng: DateRange, *,
+                      q_: Optional[str], project: Optional[str], model: Optional[str],
+                      pricing: dict) -> dict:
+    """One page of priced prompts (also used by the CSV export). ValueError on a bad sort."""
+    data = q.prompts_page(conn, req, pricing, since=rng.since, until=rng.until,
+                          q=q_ or None, project=project or None, model=model or None)
+    for r in data["items"]:
+        r.update(turn_cost(r, pricing))
+    return data
+
+
 @router.get("/prompts", response_model=PromptPage)
 def prompts(
     rng: DateRange = Depends(date_range),
@@ -34,10 +45,7 @@ def prompts(
     """Each prompt with the assistant turn that answered it, priced on all 5 token types."""
     req = PageRequest(page=page, page_size=page_size, sort=sort, order=order)
     try:
-        data = q.prompts_page(conn, req, pricing, since=rng.since, until=rng.until,
-                              q=q_ or None, project=project or None, model=model or None)
+        return prompts_with_cost(conn, req, rng, q_=q_, project=project, model=model,
+                                 pricing=pricing)
     except ValueError as e:
         raise HTTPException(422, str(e)) from None
-    for r in data["items"]:
-        r.update(turn_cost(r, pricing))
-    return data

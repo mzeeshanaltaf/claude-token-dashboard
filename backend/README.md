@@ -81,7 +81,8 @@ ignored). For local `http://` use, set `COOKIE_SECURE=false`.
   `daily`, `by-model`, `tools`, `skills`, `projects`, `projects/daily`,
   `projects/{slug}/sessions`, `sessions`, `sessions/{id}`, `prompts`, `tips`,
   `POST tips/dismiss`, `POST tips/restore`, `GET/POST plan`, `GET/POST settings`,
-  `sync-status`, `health`. Range filters are `since` (inclusive) and `until` (exclusive),
+  `sync-status`, `health`, and (phase 06) `activity/{calendar,hourly,summary}`,
+  `sessions/{id}/insights`, `tools/insights`, `search`, `export/{sessions,prompts,projects}.csv`. Range filters are `since` (inclusive) and `until` (exclusive),
   ISO 8601; no offset means UTC. `overview`, `daily` and `by-model` also take `project`
   (a slug) to scope them to one project.
 - **Daily rows** carry `sessions`, `turns`, the token sums, and the day's `cost_usd` plus
@@ -90,7 +91,28 @@ ignored). For local `http://` use, set `COOKIE_SECURE=false`.
 - **Pagination:** `sessions` and `prompts` take `page`, `page_size` (≤ 200), `sort`, `order`
   (`asc`/`desc`), `q`, `project`, `model`, and return `{items, total, page, page_size}`.
 - **Pricing** is read from `backend/pricing.json` and reloaded when its mtime changes.
-- **Timezone:** `/api/daily` buckets days in the `timezone` setting (default `UTC`).
+- **Timezone:** `/api/daily` and `/api/activity/*` bucket days and hours in the
+  `timezone` setting (default `UTC`).
+- **Activity:** `activity/calendar?metric=cost|tokens&days=365` (one row per active local
+  date in the window ending today: `value`, `cost_usd`, `tokens`, `sessions`, `turns`),
+  `activity/hourly` (all 168 ISO-weekday × local-hour cells) and `activity/summary`
+  (active days, current/longest streak, busiest day, per-active-day averages, top project,
+  peak hour). "Tokens" there means input + output + cache writes.
+- **Session insights:** `sessions/{id}/insights` → context growth per assistant turn, the
+  tool timeline (with `is_error` from the matching `_tool_result`, null without a
+  `tool_use_id`), subagents by `agent_id` plus the Agent/Task invocations, files touched
+  (Read/Edit/Write), branches, models and duration.
+- **Tools insights:** `tools/insights` → per-tool calls, linked calls, errors, error rate and
+  result tokens (linked calls only, with a `linked_note`), plus the top 20 files, shell
+  commands (Bash + PowerShell) and WebFetch domains.
+- **Search:** `search?q=&limit=8` → `prompts` (full text on `prompt_tsv`, ranked, with a
+  `ts_headline` snippet whose matches are wrapped in U+E000…U+E001), `sessions` (title
+  ILIKE) and `projects` (name or slug).
+- **CSV export:** `export/sessions.csv`, `export/prompts.csv` (the list endpoints' filters
+  and sort, no page cap) and `export/projects.csv` (range + optional `q`), streamed with
+  `Content-Disposition: attachment; filename="claude-lens-<table>-<date>.csv"`. UTF-8
+  with a BOM; formula-like text gets a leading `'` and over-long text is cut to fit
+  Excel's cell limit (see `core/csv_export.py`).
 
 ## Database tests
 

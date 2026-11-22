@@ -12,28 +12,24 @@ The living state of the redesign. Read it at the **start** of every session, aft
 | 03 | FastAPI API & auth | done | 2026-11-22 | 2026-11-22 | 235 backend tests; overview totals = old app exactly ($6,438.7082) |
 | 04 | Frontend shell & login | done | 2026-11-22 | 2026-11-22 | lint + build clean; 26/26 browser checks, no hydration warnings |
 | 05 | Frontend core pages | done | 2026-11-22 | 2026-11-22 | lint + build clean; old vs new match exactly at a common cutoff; 25/25 browser checks |
-| 06 | New features | not-started | | | |
+| 06 | New features | done | 2026-11-22 | 2026-11-22 | 265 backend tests; lint + build clean; 32/32 browser checks; CSV rows = API = Excel |
 | 07 | Deployment, docs & cleanup | not-started | | | |
 
 Status values: `not-started` · `in-progress` · `blocked` · `done`
 
 ## Baton (replace this section at the end of every session)
 
-- **Current phase:** 05 is done. Next is 06.
-- **Last commit:** `06718a3 feat(frontend): redesigned core pages with daily cost, project filters and tips undo` (phase 05), pushed to `mzeeshanaltaf/main`, plus a docs follow-up that records this hash.
+- **Current phase:** 06 is done. Next is 07.
+- **Last commit:** `06718a3 feat(frontend): redesigned core pages with daily cost, project filters and tips undo` (phase 05) + docs follow-up `b9dba39`. **Phase 06 is uncommitted** until the user approves the suggested commit (see the session log).
 - **What works:**
-  - the redesigned Overview, Prompts, Sessions (list + `/sessions/[id]`), Projects (list + `/projects/[slug]`), Skills, Tips and Settings pages; `pnpm lint` and `pnpm build` are clean (detail routes build as `◐`);
-  - backend additions (see Decisions): `/api/daily` per-day `sessions`/`turns`/`cost_usd`/`cost_by_model`, a `project` filter on overview/daily/by-model, `GET /api/projects/daily`, `POST /api/tips/restore`;
-  - shared frontend pieces for phase 06: `DataTable` (TanStack Table v8), URL-state hooks, filters, `TokenComposition`, `DailyChart`, `ModelMix`, `BarList`, `Sparkline`, `InfoTip` + `lib/glossary.ts`, `lib/usage.ts`. All are documented in `frontend/README.md` § Page patterns;
-  - the old app is untouched (85 tests OK).
+  - every page is real now (no placeholders): Activity (KPI cards, 12-month calendar heatmap, hour × weekday heatmap), Tools (calls / result tokens / errors by tool, top files, commands, WebFetch domains), the deep session view (header chips, context growth, cost per turn, tool timeline, subagents, files touched, click-to-turn), Cmd+K search, and CSV export on Sessions / Prompts / Projects;
+  - the new endpoints (see Decisions and `backend/README.md` § API); the full backend suite, `pnpm lint` and `pnpm build` are green; the old app is untouched (85 tests OK).
 - **What doesn't / open issues:**
-  - carried over: `sync_runs` stays `running` after the final retry fails (phase 01); `tool_use_id = NULL` on migrated rows (phase 02); `core/names.py` slug walk-up rarely matches on this PC (phase 00/03);
-  - the first-run plan dialog is still unseen live (the real plan is `"pro"`);
-  - the sidebar's collapsed state isn't remembered across reloads;
-  - **the real `timezone` setting is still `UTC`**, so daily buckets are UTC days. Settings has a one-click "Use this browser's zone" (the user is in Asia/Karachi); the user should decide;
-  - `/api/prompts` lists **493** prompts for all time, against 98,948 `turns` (turns counts every `type='user'` record, tool results included). It is the old app's semantics: a prompt needs an assistant row whose `parent_uuid` is the prompt's uuid. Not changed here; worth a look if prompts seem missing;
-  - `/activity` and `/tools` are still placeholders (phase 06).
-- **Exact next step:** start phase 06 with `phase-06-new-features.md`. Restart the backend first if an old process still holds :8000 (it predates the phase 05 endpoints). Read its new "Notes from phase 05" block and `frontend/README.md` § Page patterns first.
+  - **only 0.26% of tool rows have a `tool_use_id`** (175 of 66,884 tool_use rows; the rest were migrated from SQLite). So tool error rates, result tokens by tool and the timeline's red error marks cover only those calls (the UI says so), and `Agent` calls show "not recorded" for their subagent type. **Recommended: run `uv run claude-lens scan --full` once** (from `backend/`; idempotent). It re-reads the 1,205 transcripts still on disk; rows from the 75 deleted files stay as they are. It wasn't run here because it writes to the real schema; the user should decide;
+  - carried over: `sync_runs` stays `running` after the final retry fails (phase 01); `core/names.py` slug walk-up rarely matches on this PC (phase 00/03); the first-run plan dialog is still unseen live; the sidebar's collapsed state isn't remembered;
+  - **the real `timezone` setting is still `UTC`**, so the Activity buckets (and daily charts) are UTC days and hours. The page says so and links to Settings, which has a one-click "Use this browser's zone" (the user is in Asia/Karachi); the user should decide;
+  - `/api/prompts` lists 493 prompts for all time (the old app's "prompt with an answering assistant row" rule); unchanged.
+- **Exact next step:** start phase 07 with `phase-07-deployment-docs-and-cleanup.md`. Ask for the domain first, and read its new "(from phase 06)" notes (CSV streaming through Coolify's proxy, `node .next/standalone/server.js`, the scan `--full` question).
 
 ## Environment facts
 
@@ -73,11 +69,32 @@ Add facts as you learn them. Never record secrets.
   - **Only one `next dev` can run per project directory** ("Another next dev server is already running"). To check against a second backend, use `pnpm build` and then `BACKEND_URL=http://localhost:<port> pnpm exec next start --port 3001`. A build doesn't disturb a running dev server.
   - **Git Bash rewrites `/overview`-style CLI arguments into Windows paths.** Prefix with `MSYS_NO_PATHCONV=1` when you pass routes to a script.
   - **`uvicorn --reload` on Windows can hang mid-reload** and leave an orphaned `multiprocessing.spawn` worker that keeps the port. Find it by `ParentProcessId` and `taskkill /T /F` it. Prefer restarting without `--reload`.
+  - **Excel is installed** and scriptable via COM (`New-Object -ComObject Excel.Application` from the PowerShell tool), which is how phase 06 checked CSV row counts.
+  - **Real-data shape (phase 06 probes, 2026-11-22):** 236,077 messages from 2026-02-27 to 2026-11-22; 66,884 tool_use rows (175 with a `tool_use_id`) and 92,938 `_tool_result` rows (319 with one; 1,929 errors, only 1 linked); 25,548 sidechain messages across 420 agent ids (all have an `agent_id`); 73 distinct git branches. The largest session, `bd0a5299…`, has 715 assistant turns, 1,329 sidechain records and 43 subagents.
+  - **Phase 06 endpoint timings from this PC** (~150 ms per round-trip; much faster on the VPS): calendar 1.4 s, hourly 0.7 s, summary 4.3 s (all) / 1.7 s (30d; about 9 round-trips), the biggest session's insights 0.8 s, tools insights 1.7 s, search 0.6–1.3 s.
   - Old app on a copy of its DB, with nothing to rescan: `PORT=8080 python cli.py dashboard --no-scan --no-open --db <copy> --projects-dir <empty dir>`. Its 30-second scan loop always runs, even with `--no-scan`, so never point it at the real DB for a frozen comparison.
 
 ## Decisions & deviations
 
 Record anything decided during implementation that isn't in README.md's Decisions table, with the date and the reason.
+
+- **2026-11-22 (phase 06): new endpoints and their shapes** (all additive; pinned in `api/schemas_insights.py`, split from `schemas.py` to keep files small):
+  - `GET /api/activity/calendar?metric=cost|tokens&days=365` (7–1100) → `{metric, timezone, start, end, days: [{day, value, cost_usd, tokens, sessions, turns}]}`. It lists **active days only**; the UI fills the grid. Cost is the `/api/daily` rollup (`daily_model_tokens` + `cost_by_model_per_key`).
+  - `GET /api/activity/hourly` → all 168 `{dow (ISO 1–7), hour, turns, tokens, cost_usd}` cells.
+  - `GET /api/activity/summary` → active days / days in range, current and longest streak, busiest day (by cost), per-active-day averages, total cost/tokens, top project (by turns) and peak hour (by turns). The **current streak** ends on the range's last day *or the day before* (an idle morning doesn't break it); with `until`, the last day is the local day before `until`.
+  - **"Tokens" in phase 06 = core tokens** (input + output + cache writes). **"Turns" = `type='user'` records**, the overview's definition (tool results included); the hour grid's description says so.
+  - `GET /api/sessions/{id}/insights` → the spec's fields, plus `uuid` per context point and `message_uuid` per tool event/invocation (for click-to-turn), `subagent_invocations` (the spec's "Task invocations"), `files_total` (files are capped at 100), `started`/`ended`, `cost_usd` and `tool_calls_linked`. An unknown id gives empty lists (200), like `sessions/{id}`.
+  - `GET /api/tools/insights` → `{tools: [{tool_name, calls, linked, errors, error_rate, result_tokens}], calls, linked, linked_note, files, commands, domains}`. Result tokens and errors come from the `_tool_result` row joined by `tool_use_id`. **The old `/api/tools` `result_tokens` is always 0 for real tools** (the collector stores result tokens on `_tool_result` rows only); it is left as-is, and the Tools page uses the new endpoint. Commands include **PowerShell** beside Bash. Domains are lower-cased, without `www.`.
+  - `GET /api/search?q=&limit=8` (1–20): snippets mark matches with **U+E000…U+E001** instead of `<b>` (no HTML to inject). Session hits are ordered by last activity; project hits match the derived display name or the slug.
+  - `GET /api/export/{sessions,prompts,projects}.csv`: sessions/prompts take their list's filters **and sort**, paging internally by 200 (page 1 on the request connection, so a bad sort is a 422; later pages on a fresh pooled connection). Projects take the range plus an optional `q` (the Projects page's client-side name filter). UTF-8 with a BOM.
+- **2026-11-22 (phase 06): CSV cells are made Excel-safe.** Text starting with `= + - @ \t \r` gets a leading `'` (CSV injection). Text longer than **32,000 Excel units** (UTF-16 code units, with each `"` counted twice because it's escaped) is cut with " …[truncated]". Why: a real 32,766-character prompt with 144 quotes still spilled into a second Excel row; Excel's import limit applies to the raw escaped field. `prompt_text` in the DB is untouched.
+- **2026-11-22 (phase 06): the collector records `Agent` and `PowerShell` targets** (`_TARGET_FIELDS`: `Agent` → `subagent_type`, `PowerShell` → `command`). Claude Code renamed Task to Agent (219 calls, all with NULL target), and PowerShell (1,488 calls) is a shell on this PC. This only affects new ingests, or older rows after a `scan --full`.
+- **2026-11-22 (phase 06): context growth is two charts, not a dual axis.** The spec said "output tokens on a secondary bar series"; the dataviz rules forbid two y-scales. The output bars sit in their own small chart on the same turn axis (hover is synced via `syncId`). Main-thread context is a line, sidechain turns are dots, and drops below half of a > 40k context are marked "compacted". **Zero-usage turns (`<synthetic>` records) are gaps**: on a real session they dove to 0 and produced two false "compacted" marks. The `<synthetic>` model is also hidden from the header chips.
+- **2026-11-22 (phase 06): the calendar starts weeks on Monday** (ISO, to match the hour grid), not Sunday like GitHub. A day links to `/sessions?since=D&until=D` (inclusive, per the phase 05 note). The calendar always covers the last 365 days; the KPI cards and hour grid follow the range. Days are in the `timezone` setting, and the page says which.
+- **2026-11-22 (phase 06): one sequential heat scale for both heatmaps**: the input blue mixed into `--card` at 0/28/52/76/100%, plus a new `--heat-0` token for "no activity". It's one hue with monotonic lightness by construction in both themes, quantised by quantiles of the non-zero values (so one huge day doesn't wash out the rest). The legend prints the numeric steps, and both heatmaps have a Table view.
+- **2026-11-22 (phase 06): tool timeline = HTML lanes**, not Recharts: the busiest 7 tools plus "Other", ticks positioned by time, a fixed tool → colour map (Read / Edit / Write / shell, everything else grey), failures red and on top. One hover tooltip finds the nearest call within ~8px; a click jumps to its turn. Errors are only known for linked calls, and the card says how many.
+- **2026-11-22 (phase 06): Cmd+K** needs ≥ 2 characters, debounced 200 ms. cmdk filtering is off (`shouldFilter={false}`; pages are filtered by title locally). A prompt opens `/sessions/<id>?turn=<uuid>`, and the session page jumps to that row once its records load.
+- **2026-11-22 (phase 06): search performance fix.** A `LATERAL` per-title aggregate made a one-letter query time out (> 60 s; "commit" took 6.6 s). A join + `GROUP BY` brings both to ~0.3 s. Project names come from `SELECT DISTINCT project_slug, cwd` (~125 ms server-side, against 410 ms for `array_agg(DISTINCT …)`). No indexes were added.
 
 - **2026-11-22 (phase 05): backend additions** (all additive; tests in `test_api.py` / `test_queries.py`):
   - `GET /api/daily` rows add `sessions`, `turns`, `cost_usd` and `cost_by_model` (`{model: usd}`; unpriced models left out). They're priced per (day, model) by `analytics.daily_model_tokens` + `costs.cost_by_model_per_key`, so the days sum to the overview cost.
@@ -184,6 +201,43 @@ Add newest entries at the top, using this template:
 - **Gotchas:** …
 - **Notes for the next session:** <concrete, actionable; these override the phase file where they conflict>
 ```
+
+### 2026-11-22: Phase 06, done
+- **Did:**
+  - backend: `activity/{calendar,hourly,summary}`, `sessions/{id}/insights`, `tools/insights`, `search`, and `export/{sessions,prompts,projects}.csv`, plus tests. The sessions/prompts/projects routers now share their page builders with the export. The collector records `Agent` and `PowerShell` targets;
+  - frontend: the Activity page (KPI cards, calendar heatmap, hour × weekday heatmap), the Tools page, the deep session view (chips, context growth + output, cost per turn, tool timeline, subagents, files touched, click-to-turn via `DataTable focusRow`), Cmd+K search, and the Export CSV buttons. `placeholders.tsx` is deleted;
+  - probed the real data, fixed a search query that timed out, checked everything in headless Chrome and the CSVs in Excel; docs updated.
+- **Files:**
+  - backend created: `claude_lens/api/routers/{activity,tools,search,export}.py`, `claude_lens/api/schemas_insights.py`, `claude_lens/core/{activity,csv_export,session_insights}.py`, `claude_lens/db/queries/{activity,session_insights,tool_insights,search}.py`, `tests/test_feature_{units,api}.py`;
+  - backend changed: `claude_lens/api/main.py`, `claude_lens/api/routers/{sessions,prompts,projects}.py`, `claude_lens/collector/parse.py`, `tests/{helpers,test_api,test_parse}.py`, `README.md`;
+  - frontend created: `components/activity/{activity-page,calendar-heatmap,hour-heatmap,heat-legend}.tsx`, `components/charts/{heat-scale.ts,hover-tip.tsx}`, `components/sessions/{turn-charts,tool-timeline,insight-cards}.tsx`, `components/tools/tools-page.tsx`, `components/export-button.tsx`;
+  - frontend changed: `app/(dashboard)/{activity,tools}/page.tsx`, `app/globals.css` (`--heat-0`), `components/data-table.tsx` (`focusRow`, `data-row-id`), `components/sessions/session-detail.tsx`, `components/shell/command-menu.tsx`, `components/{sessions,prompts,projects}/*-page.tsx` (export button), `lib/{queries,api-types}.ts`, `README.md`; deleted `components/placeholders.tsx`;
+  - docs: this file, the phase 06 file (all boxes ticked, Outcome) and the phase 07 file ("from phase 06" notes).
+- **Verification:**
+  - Backend: `uv run pytest` (full suite) → **265 passed** in 690 s (240 + 25 new); afterwards `pg_namespace` held only `claude_dashboard`. The new files: `test_feature_units.py` 13 (offline), `test_feature_api.py` 11 (calendar across a UTC midnight under America/New_York, streaks, the hour grid, the insights shape, tools insights, search on a fixture prompt, a 205-row CSV over two pages, filters, formula guard, 401); `test_parse.py` +1. The environment check at session start gave 240 passed.
+  - `pnpm typecheck`, `pnpm lint`: clean. `pnpm build`: `/activity` and `/tools` `○`, detail routes `◐`.
+  - Old app: `python -m unittest discover tests` → **Ran 85 tests, OK**.
+  - **Real data** (read-only probes, then a throwaway copy of `claude_dashboard` behind a backend on :8001 and `next start` on :3001): **headless Chrome 32/32 PASS**:
+    - the calendar's earliest linked day is **2026-02-27** (210 active days, 365 squares); a day click → `/sessions?since=2026-11-22&until=2026-11-22` with 5 sessions; the Tokens toggle refetches; the tooltip shows cost/tokens/sessions; the hour grid has 168 cells;
+    - session `bd0a5299…`: the context line (peak 431.1K; no false compaction marks after the `<synthetic>` fix), 43 subagent runs = $31.60 (54% of $58.44), 8 timeline lanes, "Top 15 of 161" files, branch + duration chips; the "most expensive" button and a click on the last cost bar both page the turn table (→ "Showing 701–781 of 781") and focus the row in view;
+    - Tools: the coverage alert (0.3%), blurred commands and paths;
+    - Cmd+K "ResuMatchAI" → 8 prompts with 25 highlights; keyboard Enter opens `/sessions/d67661d8…?turn=dd1a9529…`, scrolled to the turn; snippets blur under Ctrl+B;
+    - the three Export CSV buttons download `claude-lens-<table>-2026-11-22.csv` with the page's filters, sort and range;
+    - no horizontal overflow at 390px on Activity, Tools, the session, Sessions, Prompts or Projects; **no console errors or hydration warnings**; dark and light screenshots checked by eye.
+  - **CSV vs API vs Excel** (opened through Excel COM): sessions **1,090 / 1,090 / 1,090**, prompts `q=commit` **69 / 69 / 69** (after the Excel-cap fix; before it, Excel showed 70), projects 30d **27 / – / 27**.
+  - `pg_namespace` afterwards: only `claude_dashboard` (the e2e copy was dropped). The real schema was only read.
+- **Commit:** uncommitted. Suggested: `feat: activity insights, deep session view, tools page, cmd+k search and csv export`.
+- **Gotchas:**
+  - The React Compiler lint (`react-hooks/refs`) rejects reading fields off a hook's return object that also contains a ref (`tip.tip`, `tip.hide`). Destructure it.
+  - The `<synthetic>` model: zero-usage assistant records (API errors, interruptions) appear inside real sessions. Exclude them from anything that reads "context size".
+  - Excel's CSV cell limit counts the **escaped** field in UTF-16 units; `len()` isn't enough.
+  - Playwright: `waitForURL("**/activity**")` also matches `/login?next=/activity`, so compare `pathname`. Recharts chart clicks need a preceding hover, and the chart must be scrolled into view first.
+  - `next start` warns that it "does not work with output: standalone". It worked for local checks; production must use `node .next/standalone/server.js` (noted in phase 07).
+  - The servers on :3000 and :8000 (from another session) were left alone; mine ran on :8001/:3001 and are stopped.
+- **Notes for the next session:**
+  - Ask the user about `claude-lens scan --full` (see Baton). After it runs, the Tools coverage alert should disappear and the subagent badges should show real types.
+  - During the deploy, check a CSV export through the Coolify proxy (streaming), and Cmd+K over HTTPS.
+  - Rebuild the throwaway e2e copy for browser checks as in phase 05's notes. This session's helper (`e2e_schema.py create|drop|list`) lived in the scratchpad.
 
 ### 2026-11-22: Phase 05, done
 - **Did:**

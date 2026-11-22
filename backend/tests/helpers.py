@@ -53,6 +53,7 @@ def user_record(uuid="u1", sid="s1", ts="2026-04-10T00:00:00Z", text="hi"):
 
 _MSG_DEFAULTS = {
     "parent_uuid": None, "project_slug": "p", "machine": "test-pc", "cwd": None,
+    "git_branch": None,
     "type": "assistant", "is_sidechain": False, "agent_id": None, "model": None,
     "message_id": None, "input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0,
     "cache_create_5m_tokens": 0, "cache_create_1h_tokens": 0, "prompt_text": None,

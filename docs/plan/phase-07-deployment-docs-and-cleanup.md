@@ -21,6 +21,12 @@ docker --version   # if Docker Desktop is available, for a local compose test
 
 ## Read first
 
+- *(from phase 06)*:
+  - **Check a CSV export through Coolify's proxy.** `/api/export/*.csv` streams (`StreamingResponse` → the Next proxy passes the body through). After deploying, download a sessions export and compare its row count with the Sessions page total.
+  - **Copy `pnpm start` with care.** It prints `"next start" does not work with "output: standalone"`; use `node .next/standalone/server.js` in the image.
+  - **Ask the user about `claude-lens scan --full`.** Only 0.26% of tool rows have a `tool_use_id` (rows migrated from SQLite have none), so the Tools page's error rates, the session tool timeline's errors and the `Agent` subagent types are mostly blank. A full scan re-reads the 1,205 transcripts still on disk and links them, without touching rows from the 75 missing files. If it hasn't been run yet, ask the user before running it: it writes to the real schema.
+  - The real `timezone` setting is still `UTC`. The Activity page labels its buckets with the zone and links to Settings.
+
 - The **`add-app-to-coolify` skill**. Use it for the Coolify part of this phase.
 - The user's global CLAUDE.md section on VPS Docker disk cleanup. A new compose app adds build cache, and the weekly prune cron covers it, so there's nothing to change.
 - The root `CLAUDE.md` § Git remotes (push to `mzeeshanaltaf`, never `origin`).

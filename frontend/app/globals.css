@@ -124,6 +124,8 @@
   --sidebar-border: oklch(0.91 0.008 250);
   --sidebar-ring: oklch(0.62 0.15 254);
   --glow: oklch(0.7 0.15 254 / 0.1);
+  /* heatmap "no activity" cell (components/charts/heat-scale.ts) */
+  --heat-0: oklch(0.94 0.006 250);
 }
 
 .dark {
@@ -157,6 +159,7 @@
   --sidebar-border: oklch(0.27 0.015 250);
   --sidebar-ring: oklch(0.7 0.155 252 / 0.6);
   --glow: oklch(0.7 0.155 252 / 0.09);
+  --heat-0: oklch(0.245 0.014 250);
 
   /*
    * Dark-mode steps of the same hues (phase 05). The light values sat above

@@ -235,6 +235,10 @@ def test_openapi_lists_every_endpoint(anon):
         "/api/sessions/{session_id}", "/api/prompts", "/api/tips", "/api/tips/dismiss",
         "/api/tips/restore",
         "/api/plan", "/api/settings", "/api/sync-status",
+        # phase 06
+        "/api/activity/calendar", "/api/activity/hourly", "/api/activity/summary",
+        "/api/sessions/{session_id}/insights", "/api/tools/insights", "/api/search",
+        "/api/export/sessions.csv", "/api/export/prompts.csv", "/api/export/projects.csv",
     }
     assert set(paths) == expected
     assert anon.get("/docs").status_code == 200

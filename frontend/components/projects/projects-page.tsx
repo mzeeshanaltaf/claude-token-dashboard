@@ -6,6 +6,7 @@ import { useMemo } from "react";
 
 import { DataTable } from "@/components/data-table";
 import { ErrorState } from "@/components/error-state";
+import { ExportButton } from "@/components/export-button";
 import { FilterBar, SearchBox } from "@/components/filters";
 import { Sparkline } from "@/components/sparkline";
 import { Card, CardContent } from "@/components/ui/card";
@@ -126,6 +127,7 @@ export function ProjectsPage() {
         <span className="text-xs text-muted-foreground tabular">
           {projects.data ? `${fmt.int(rows.length)} of ${fmt.int(projects.data.length)} projects` : null}
         </span>
+        <ExportButton table="projects" query={{ q: get("q") }} />
       </FilterBar>
       <Card className="py-4">
         <CardContent className="px-4">

@@ -47,3 +47,13 @@ Each page lives in `components/<page>/…-page.tsx`; `app/(dashboard)/<route>/pa
 - **Detail pages** (`/sessions/[id]`, `/projects/[slug]`) read the param with `useParams()` in a client component; the dashboard layout's `<Suspense>` makes them `◐` (static shell). On dynamic routes **`usePathname()` is URL data too**: only call it inside a `<Suspense>` (see `components/shell/top-bar.tsx`, `app-sidebar.tsx`), or the build fails.
 - **Refetches** keep the previous data (`placeholderData`); pass `dim={q.isPlaceholderData}` to `SectionCard`/`DataTable` to fade it instead of flashing skeletons.
 - **Mutations** with an undo: see `components/tips/tips-page.tsx` (optimistic `setQueryData`, a sonner toast with an Undo action).
+
+## Additions (phase 06)
+
+- **Heatmaps** are CSS grids, not Recharts: `components/charts/heat-scale.ts` (`quantizer` = quantile steps over non-zero values, `heatColor` = the input blue mixed into `--card`, so lightness stays monotonic in both themes; `--heat-0` is "no activity") and `components/activity/heat-legend.tsx` (Less→More with the numeric steps). See `activity/calendar-heatmap.tsx` and `activity/hour-heatmap.tsx`; both have a Table view.
+- **One tooltip for many marks:** `components/charts/hover-tip.tsx` (`useHoverTip` + `<HoverTip>`). **Destructure the hook** (`const { ref, tip, show, hide } = useHoverTip()`): the React Compiler lint rejects reading `.tip` off an object that also holds a ref.
+- **Jump to a row:** `DataTable focusRow={{ id, nonce }}` picks the client page that holds the row, scrolls it into view, focuses and flashes it (needs `getRowId`; rows carry `data-row-id`). The session page uses it for chart clicks and `?turn=<uuid>` links (Cmd+K prompt results); it switches the Turns/All filter first when the record is hidden.
+- **Recharts clicks:** a chart's `onClick` gets `activeTooltipIndex` from tooltip state, which a hover sets (rAF-throttled). In Playwright, move the mouse onto the chart and wait before clicking.
+- **Range-free queries with params:** `useApiQuery(path, { query })` (the query is part of the key and keeps the previous data while it changes).
+- **CSV export:** `components/export-button.tsx` builds `/api/export/<table>.csv?…` on click (filters + `rangeToApi`, which reads the clock, so never in render) and clicks a temporary `<a download>`; the proxy streams the body.
+- **Search palette:** `components/shell/command-menu.tsx` (`shouldFilter={false}`, 200 ms debounce, ≥ 2 characters). Snippet highlights arrive as U+E000…U+E001 and are rendered as `<mark>` text, never HTML.

@@ -6,6 +6,7 @@ import { useMemo } from "react";
 
 import { DataTable } from "@/components/data-table";
 import { ErrorState } from "@/components/error-state";
+import { ExportButton } from "@/components/export-button";
 import { FilterBar, ModelSelect, ProjectSelect, SearchBox } from "@/components/filters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -121,6 +122,7 @@ export function SessionsPage() {
         <SearchBox placeholder="Search title or session id" />
         <ProjectSelect />
         <ModelSelect />
+        <ExportButton table="sessions" query={{ q, project, model, sort: t.sort, order: t.order }} />
       </FilterBar>
       {sessions.isError ? (
         <ErrorState error={sessions.error} onRetry={() => sessions.refetch()} />

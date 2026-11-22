@@ -190,6 +190,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/activity/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Calendar
+         * @description One value per active local date over the last `days` days (today included).
+         */
+        get: operations["calendar_api_activity_calendar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activity/hourly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Hourly
+         * @description A 7x24 grid (ISO weekday x local hour) of turns, core tokens and cost.
+         */
+        get: operations["hourly_api_activity_hourly_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activity/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Summary
+         * @description Active days, streaks, busiest day, per-active-day averages, top project, peak hour.
+         */
+        get: operations["summary_api_activity_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/daily": {
         parameters: {
             query?: never;
@@ -286,6 +346,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sessions/{session_id}/insights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Session Insights
+         * @description New in Claude Lens (phase 06): context growth, tool timeline, subagents,
+         *     files touched, branches, models and duration. An unknown id gives empty lists.
+         */
+        get: operations["session_insights_api_sessions__session_id__insights_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/prompts": {
         parameters: {
             query?: never;
@@ -298,6 +379,112 @@ export interface paths {
          * @description Each prompt with the assistant turn that answered it, priced on all 5 token types.
          */
         get: operations["prompts_api_prompts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tools/insights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tools Insights
+         * @description Per tool: calls, result tokens and error rate; the top 20 files, shell
+         *     commands (Bash and PowerShell) and WebFetch domains.
+         *
+         *     Result tokens and the error rate count only *linked* calls: those whose
+         *     `tool_use_id` matches a result. Rows migrated from the old SQLite database
+         *     have no `tool_use_id`; `linked_note` says how many calls are covered.
+         */
+        get: operations["tools_insights_api_tools_insights_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search
+         * @description Grouped results: prompts (full-text, ranked, with a snippet), sessions
+         *     (title) and projects (name or slug). A blank `q` returns empty groups.
+         */
+        get: operations["search_api_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/export/sessions.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Sessions
+         * @description Every session `/api/sessions` would list for these filters, as CSV.
+         */
+        get: operations["export_sessions_api_export_sessions_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/export/prompts.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Prompts
+         * @description Every prompt `/api/prompts` would list for these filters, as CSV.
+         */
+        get: operations["export_prompts_api_export_prompts_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/export/projects.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Projects
+         * @description Every project `/api/projects` lists for the range, most expensive first, as CSV.
+         */
+        get: operations["export_projects_api_export_projects_csv_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -432,6 +619,138 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ActivityCalendar */
+        ActivityCalendar: {
+            /**
+             * Metric
+             * @enum {string}
+             */
+            metric: "cost" | "tokens";
+            /** Timezone */
+            timezone: string;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /**
+             * Days
+             * @description active days only, oldest first
+             */
+            days: components["schemas"]["CalendarDay"][];
+        };
+        /** ActivityHourly */
+        ActivityHourly: {
+            /** Timezone */
+            timezone: string;
+            /**
+             * Cells
+             * @description all 168 cells, Monday 00h first
+             */
+            cells: components["schemas"]["HourCell"][];
+        };
+        /** ActivitySummary */
+        ActivitySummary: {
+            /** Timezone */
+            timezone: string;
+            /** First Day */
+            first_day: string | null;
+            /**
+             * Last Day
+             * Format: date
+             */
+            last_day: string;
+            /** Days In Range */
+            days_in_range: number;
+            /** Active Days */
+            active_days: number;
+            /** Current Streak */
+            current_streak: number;
+            /** Longest Streak */
+            longest_streak: number;
+            busiest_day: components["schemas"]["BusiestDay"] | null;
+            /** Avg Cost Per Active Day */
+            avg_cost_per_active_day: number;
+            /** Avg Tokens Per Active Day */
+            avg_tokens_per_active_day: number;
+            /** Total Cost Usd */
+            total_cost_usd: number;
+            /** Total Tokens */
+            total_tokens: number;
+            top_project: components["schemas"]["TopProject"] | null;
+            peak_hour: components["schemas"]["PeakHour"] | null;
+        };
+        /** BusiestDay */
+        BusiestDay: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Cost Usd */
+            cost_usd: number;
+            /** Tokens */
+            tokens: number;
+        };
+        /** CalendarDay */
+        CalendarDay: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Value */
+            value: number;
+            /** Cost Usd */
+            cost_usd: number;
+            /** Tokens */
+            tokens: number;
+            /** Sessions */
+            sessions: number;
+            /** Turns */
+            turns: number;
+        };
+        /** CommandStat */
+        CommandStat: {
+            /** Command */
+            command: string;
+            /** Tool Name */
+            tool_name: string;
+            /** Calls */
+            calls: number;
+            /** Sessions */
+            sessions: number;
+            /**
+             * Last Used
+             * Format: date-time
+             */
+            last_used: string;
+        };
+        /** ContextPoint */
+        ContextPoint: {
+            /** Uuid */
+            uuid: string;
+            /**
+             * Ts
+             * Format: date-time
+             */
+            ts: string;
+            /** Context Tokens */
+            context_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /** Cost */
+            cost: number | null;
+            /** Model */
+            model: string | null;
+            /** Is Sidechain */
+            is_sidechain: boolean;
+        };
         /** DailyRow */
         DailyRow: {
             /**
@@ -458,6 +777,51 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /** DomainStat */
+        DomainStat: {
+            /** Domain */
+            domain: string;
+            /** Calls */
+            calls: number;
+            /**
+             * Last Used
+             * Format: date-time
+             */
+            last_used: string;
+        };
+        /** FileStat */
+        FileStat: {
+            /** Path */
+            path: string;
+            /** Read */
+            read: number;
+            /** Edit */
+            edit: number;
+            /** Write */
+            write: number;
+            /** Total */
+            total: number;
+            /** Sessions */
+            sessions: number;
+            /**
+             * Last Used
+             * Format: date-time
+             */
+            last_used: string;
+        };
+        /** FileTouch */
+        FileTouch: {
+            /** Path */
+            path: string;
+            /** Read */
+            read: number;
+            /** Edit */
+            edit: number;
+            /** Write */
+            write: number;
+            /** Total */
+            total: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -469,6 +833,25 @@ export interface components {
             status: string;
             /** Version */
             version: string;
+        };
+        /** HourCell */
+        HourCell: {
+            /**
+             * Dow
+             * @description ISO weekday: 1 = Monday … 7 = Sunday
+             */
+            dow: number;
+            /**
+             * Hour
+             * @description local hour
+             */
+            hour: number;
+            /** Turns */
+            turns: number;
+            /** Tokens */
+            tokens: number;
+            /** Cost Usd */
+            cost_usd: number;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -515,6 +898,15 @@ export interface components {
             cost_usd: number | null;
             /** Cost Estimated */
             cost_estimated: boolean;
+        };
+        /** ModelUse */
+        ModelUse: {
+            /** Model */
+            model: string;
+            /** Turns */
+            turns: number;
+            /** Cost */
+            cost: number | null;
         };
         /** Ok */
         Ok: {
@@ -574,6 +966,13 @@ export interface components {
             /** Revoked Sessions */
             revoked_sessions: number;
         };
+        /** PeakHour */
+        PeakHour: {
+            /** Hour */
+            hour: number;
+            /** Turns */
+            turns: number;
+        };
         /** PlanResponse */
         PlanResponse: {
             /** Plan */
@@ -602,6 +1001,20 @@ export interface components {
             day: string;
             /** Cost Usd */
             cost_usd: number;
+        };
+        /** ProjectHit */
+        ProjectHit: {
+            /** Project Slug */
+            project_slug: string;
+            /** Project Name */
+            project_name: string;
+            /** Sessions */
+            sessions: number;
+            /**
+             * Last Active
+             * Format: date-time
+             */
+            last_active: string;
         };
         /** ProjectRow */
         ProjectRow: {
@@ -673,6 +1086,29 @@ export interface components {
             /** Estimated Cost Usd */
             estimated_cost_usd?: number | null;
         };
+        /** PromptHit */
+        PromptHit: {
+            /** User Uuid */
+            user_uuid: string;
+            /** Session Id */
+            session_id: string;
+            /** Project Slug */
+            project_slug: string;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp: string;
+            /** Rank */
+            rank: number;
+            /**
+             * Snippet
+             * @description matches wrapped in U+E000 … U+E001
+             */
+            snippet: string;
+            /** Title */
+            title?: string | null;
+        };
         /** PromptPage */
         PromptPage: {
             /** Items */
@@ -731,6 +1167,68 @@ export interface components {
             cost_cache_create_5m_usd?: number | null;
             /** Cost Cache Create 1H Usd */
             cost_cache_create_1h_usd?: number | null;
+        };
+        /** SearchResults */
+        SearchResults: {
+            /** Q */
+            q: string;
+            /** Prompts */
+            prompts: components["schemas"]["PromptHit"][];
+            /** Sessions */
+            sessions: components["schemas"]["SessionHit"][];
+            /** Projects */
+            projects: components["schemas"]["ProjectHit"][];
+        };
+        /** SessionHit */
+        SessionHit: {
+            /** Session Id */
+            session_id: string;
+            /** Title */
+            title: string;
+            /** Project Slug */
+            project_slug: string;
+            /**
+             * Started
+             * Format: date-time
+             */
+            started: string;
+            /**
+             * Ended
+             * Format: date-time
+             */
+            ended: string;
+        };
+        /** SessionInsights */
+        SessionInsights: {
+            /** Context Growth */
+            context_growth: components["schemas"]["ContextPoint"][];
+            /** Tool Timeline */
+            tool_timeline: components["schemas"]["ToolEvent"][];
+            /** Subagents */
+            subagents: components["schemas"]["Subagent"][];
+            /** Subagent Invocations */
+            subagent_invocations: components["schemas"]["SubagentInvocation"][];
+            /**
+             * Files
+             * @description Read/Edit/Write targets, most touched first (max 100)
+             */
+            files: components["schemas"]["FileTouch"][];
+            /** Files Total */
+            files_total: number;
+            /** Branches */
+            branches: string[];
+            /** Models */
+            models: components["schemas"]["ModelUse"][];
+            /** Duration S */
+            duration_s: number | null;
+            /** Started */
+            started: string | null;
+            /** Ended */
+            ended: string | null;
+            /** Cost Usd */
+            cost_usd: number;
+            /** Tool Calls Linked */
+            tool_calls_linked: number;
         };
         /** SessionPage */
         SessionPage: {
@@ -811,6 +1309,39 @@ export interface components {
             /** Tokens Per Call */
             tokens_per_call: number | null;
         };
+        /** Subagent */
+        Subagent: {
+            /** Agent Id */
+            agent_id: string;
+            /** Turns */
+            turns: number;
+            /** Tokens */
+            tokens: number;
+            /** Cost */
+            cost: number | null;
+            /**
+             * First Ts
+             * Format: date-time
+             */
+            first_ts: string;
+            /**
+             * Last Ts
+             * Format: date-time
+             */
+            last_ts: string;
+        };
+        /** SubagentInvocation */
+        SubagentInvocation: {
+            /**
+             * Ts
+             * Format: date-time
+             */
+            ts: string;
+            /** Subagent Type */
+            subagent_type: string | null;
+            /** Message Uuid */
+            message_uuid: string;
+        };
         /** SyncRun */
         SyncRun: {
             /** Id */
@@ -864,6 +1395,22 @@ export interface components {
             /** Key */
             key: string;
         };
+        /** ToolEvent */
+        ToolEvent: {
+            /**
+             * Ts
+             * Format: date-time
+             */
+            ts: string;
+            /** Tool Name */
+            tool_name: string;
+            /** Target */
+            target: string | null;
+            /** Is Error */
+            is_error: boolean | null;
+            /** Message Uuid */
+            message_uuid: string;
+        };
         /** ToolRow */
         ToolRow: {
             /** Tool Name */
@@ -872,6 +1419,51 @@ export interface components {
             calls: number;
             /** Result Tokens */
             result_tokens: number;
+        };
+        /** ToolStat */
+        ToolStat: {
+            /** Tool Name */
+            tool_name: string;
+            /** Calls */
+            calls: number;
+            /** Linked */
+            linked: number;
+            /** Errors */
+            errors: number;
+            /** Error Rate */
+            error_rate: number | null;
+            /** Result Tokens */
+            result_tokens: number;
+        };
+        /** ToolsInsights */
+        ToolsInsights: {
+            /** Tools */
+            tools: components["schemas"]["ToolStat"][];
+            /** Calls */
+            calls: number;
+            /** Linked */
+            linked: number;
+            /** Linked Note */
+            linked_note: string;
+            /** Files */
+            files: components["schemas"]["FileStat"][];
+            /** Commands */
+            commands: components["schemas"]["CommandStat"][];
+            /** Domains */
+            domains: components["schemas"]["DomainStat"][];
+        };
+        /** TopProject */
+        TopProject: {
+            /** Project Slug */
+            project_slug: string;
+            /** Project Name */
+            project_name: string;
+            /** Turns */
+            turns: number;
+            /** Sessions */
+            sessions: number;
+            /** Cost Usd */
+            cost_usd: number;
         };
         /** TurnRow */
         TurnRow: {
@@ -1328,6 +1920,128 @@ export interface operations {
             };
         };
     };
+    calendar_api_activity_calendar_get: {
+        parameters: {
+            query?: {
+                metric?: "cost" | "tokens";
+                /** @description window length, ending today */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityCalendar"];
+                };
+            };
+            /** @description not logged in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hourly_api_activity_hourly_get: {
+        parameters: {
+            query?: {
+                /** @description ISO 8601, inclusive (no offset = UTC) */
+                since?: string | null;
+                /** @description ISO 8601, exclusive (no offset = UTC) */
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityHourly"];
+                };
+            };
+            /** @description not logged in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    summary_api_activity_summary_get: {
+        parameters: {
+            query?: {
+                /** @description ISO 8601, inclusive (no offset = UTC) */
+                since?: string | null;
+                /** @description ISO 8601, exclusive (no offset = UTC) */
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivitySummary"];
+                };
+            };
+            /** @description not logged in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     projects_daily_api_projects_daily_get: {
         parameters: {
             query?: {
@@ -1544,6 +2258,44 @@ export interface operations {
             };
         };
     };
+    session_insights_api_sessions__session_id__insights_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionInsights"];
+                };
+            };
+            /** @description not logged in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     prompts_api_prompts_get: {
         parameters: {
             query?: {
@@ -1577,6 +2329,222 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PromptPage"];
+                };
+            };
+            /** @description not logged in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tools_insights_api_tools_insights_get: {
+        parameters: {
+            query?: {
+                /** @description ISO 8601, inclusive (no offset = UTC) */
+                since?: string | null;
+                /** @description ISO 8601, exclusive (no offset = UTC) */
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolsInsights"];
+                };
+            };
+            /** @description not logged in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_api_search_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                /** @description per group */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResults"];
+                };
+            };
+            /** @description not logged in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_sessions_api_export_sessions_csv_get: {
+        parameters: {
+            query?: {
+                sort?: ("ended" | "started" | "turns" | "tokens" | "input_tokens" | "output_tokens" | "cache_read_tokens" | "cache_write_tokens" | "total_tokens" | "cost" | "title") | null;
+                order?: ("asc" | "desc") | null;
+                q?: string | null;
+                project?: string | null;
+                model?: string | null;
+                /** @description ISO 8601, inclusive (no offset = UTC) */
+                since?: string | null;
+                /** @description ISO 8601, exclusive (no offset = UTC) */
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description CSV file (UTF-8 with BOM) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
+                };
+            };
+            /** @description not logged in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_prompts_api_export_prompts_csv_get: {
+        parameters: {
+            query?: {
+                sort?: ("tokens" | "recent" | "cost" | "cache_read" | "chars") | null;
+                order?: ("asc" | "desc") | null;
+                q?: string | null;
+                project?: string | null;
+                model?: string | null;
+                /** @description ISO 8601, inclusive (no offset = UTC) */
+                since?: string | null;
+                /** @description ISO 8601, exclusive (no offset = UTC) */
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description CSV file (UTF-8 with BOM) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
+                };
+            };
+            /** @description not logged in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_projects_api_export_projects_csv_get: {
+        parameters: {
+            query?: {
+                /** @description name or slug contains (the Projects page filter) */
+                q?: string | null;
+                /** @description ISO 8601, inclusive (no offset = UTC) */
+                since?: string | null;
+                /** @description ISO 8601, exclusive (no offset = UTC) */
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description CSV file (UTF-8 with BOM) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
                 };
             };
             /** @description not logged in */

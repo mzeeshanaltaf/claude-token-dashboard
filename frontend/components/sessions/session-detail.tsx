@@ -1,9 +1,10 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
+import { ClockIcon, GitBranchIcon } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { useCallback, useMemo, useState } from "react";
 
 import { TokenComposition, type TokenTotals } from "@/components/charts/token-composition";
 import { DataTable } from "@/components/data-table";
@@ -22,9 +23,38 @@ import { fmt } from "@/lib/format";
 import { GLOSSARY } from "@/lib/glossary";
 import { useApiQuery } from "@/lib/queries";
 
+import { FilesCard, SubagentsCard } from "./insight-cards";
+import { ToolTimeline } from "./tool-timeline";
+import { ContextGrowthChart, TurnCostChart } from "./turn-charts";
 import { TurnDialog, toolCallsOf } from "./turn-dialog";
 
 type Turn = Schema<"TurnRow">;
+
+/** Header chips: git branch(es), duration, models with their turn counts. */
+function InsightChips({ data }: { data: Schema<"SessionInsights"> }) {
+  return (
+    <>
+      {data.branches.map((b) => (
+        <Badge key={b} variant="outline" className="blur-sensitive gap-1 font-mono text-[11px]" title="git branch">
+          <GitBranchIcon />
+          {b}
+        </Badge>
+      ))}
+      {data.duration_s != null && (
+        <Badge variant="outline" className="gap-1 text-[11px]" title="From the first to the last record">
+          <ClockIcon />
+          {fmt.duration(data.duration_s * 1000)}
+        </Badge>
+      )}
+      {data.models.filter((m) => m.model !== "<synthetic>").map((m) => (
+        <span key={m.model} className="inline-flex items-center gap-1" title={`${m.turns} turns · ${fmt.usd(m.cost)}`}>
+          <ModelBadge model={m.model} />
+          <span className="font-mono tabular">×{fmt.int(m.turns)}</span>
+        </span>
+      ))}
+    </>
+  );
+}
 
 /** The project label the old page used: the cwd's last folder, else the slug. */
 function projectLabel(turns: Turn[]): string {
@@ -81,22 +111,47 @@ const n = (id: string, header: string, get: (t: Turn) => number, info?: string):
   cell: ({ getValue }) => fmt.int(getValue() as number),
 });
 
+const isTurn = (t: Turn) => t.type === "assistant" || (t.type === "user" && !!t.prompt_text);
+
 export function SessionDetail() {
   const { id } = useParams<{ id: string }>();
   const sessionId = decodeURIComponent(id);
   const href = useRangedHref();
+  const search = useSearchParams();
   const q = useApiQuery("/api/sessions/{session_id}", { params: { session_id: sessionId } });
+  const insights = useApiQuery("/api/sessions/{session_id}/insights", { params: { session_id: sessionId } });
   const [open, setOpen] = useState<Turn | null>(null);
   const [show, setShow] = useState<"turns" | "all">("turns");
+  const [focus, setFocus] = useState<{ id: string; nonce: number } | null>(null);
 
   const turns = useMemo(() => q.data ?? [], [q.data]);
   // "Turns": prompts and assistant replies. Tool-result and attachment records
   // (no tokens, no text of their own) are hidden until "All records".
-  const shown = useMemo(
-    () => (show === "all" ? turns : turns.filter((t) => t.type === "assistant" || (t.type === "user" && !!t.prompt_text))),
-    [turns, show],
-  );
+  const shown = useMemo(() => (show === "all" ? turns : turns.filter(isTurn)), [turns, show]);
   const totals = useMemo(() => totalsOf(turns), [turns]);
+
+  /** Show a record in the table: widen the filter if it hides it, then jump. */
+  const focusTurn = useCallback(
+    (uuid: string) => {
+      const rec = turns.find((t) => t.uuid === uuid);
+      if (!rec) return;
+      if (!isTurn(rec)) setShow("all");
+      setFocus((f) => ({ id: uuid, nonce: (f?.nonce ?? 0) + 1 }));
+    },
+    [turns],
+  );
+
+  // `?turn=<uuid>` (a search result): jump once the records have loaded.
+  const turnParam = search.get("turn");
+  const [handledTurn, setHandledTurn] = useState<string | null>(null);
+  if (turnParam && q.data && handledTurn !== turnParam) {
+    setHandledTurn(turnParam);
+    const rec = q.data.find((t) => t.uuid === turnParam);
+    if (rec) {
+      if (!isTurn(rec)) setShow("all");
+      setFocus({ id: turnParam, nonce: 1 });
+    }
+  }
 
   const columns = useMemo<ColumnDef<Turn, unknown>[]>(
     () => [
@@ -191,6 +246,7 @@ export function SessionDetail() {
               {projectLabel(turns)}
             </Link>
             <CopyId id={sessionId} label="session id" />
+            {insights.data && <InsightChips data={insights.data} />}
           </>
         }
       />
@@ -204,6 +260,29 @@ export function SessionDetail() {
       </div>
 
       <TokenComposition totals={totals} title="Tokens in this session" />
+
+      {insights.isError ? (
+        <ErrorState error={insights.error} onRetry={() => insights.refetch()} />
+      ) : !insights.data ? (
+        <>
+          <ChartSkeleton className="h-80" />
+          <ChartSkeleton className="h-48" />
+        </>
+      ) : (
+        <>
+          <ContextGrowthChart points={insights.data.context_growth} onTurn={focusTurn} />
+          <TurnCostChart points={insights.data.context_growth} onTurn={focusTurn} />
+          <ToolTimeline events={insights.data.tool_timeline} linked={insights.data.tool_calls_linked} onTurn={focusTurn} />
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <SubagentsCard
+              agents={insights.data.subagents}
+              invocations={insights.data.subagent_invocations}
+              sessionCost={insights.data.cost_usd}
+            />
+            <FilesCard files={insights.data.files} total={insights.data.files_total} />
+          </div>
+        </>
+      )}
 
       <SectionCard
         title="Turn by turn"
@@ -220,6 +299,7 @@ export function SessionDetail() {
           data={shown}
           getRowId={(t) => t.uuid}
           clientPageSize={100}
+          focusRow={focus}
           onRowClick={(t) => (t.prompt_text || toolCallsOf(t).length ? setOpen(t) : undefined)}
           rowClassName={(r) => (r.original.prompt_text || toolCallsOf(r.original).length ? undefined : "cursor-default")}
         />

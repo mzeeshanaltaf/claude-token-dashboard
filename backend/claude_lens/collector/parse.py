@@ -43,6 +43,11 @@ _TARGET_FIELDS = {
     "WebSearch": "query",
     "Task":      "subagent_type",
     "Skill":     "skill",
+    # Claude Lens (phase 06): Claude Code renamed Task to Agent, and runs
+    # PowerShell beside Bash on Windows. Rows ingested before this have NULL
+    # targets for both until a `claude-lens scan --full`.
+    "Agent":      "subagent_type",
+    "PowerShell": "command",
 }
 
 

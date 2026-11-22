@@ -54,6 +54,17 @@ def test_tool_use_rows_capture_tool_use_id(load_fixture):
         assert t["project_slug"] == "p"
 
 
+def test_agent_and_powershell_targets():
+    rec = {"type": "assistant", "uuid": "a", "message": {"content": [
+        {"type": "tool_use", "id": "t1", "name": "Agent",
+         "input": {"description": "look", "subagent_type": "Explore", "prompt": "..."}},
+        {"type": "tool_use", "id": "t2", "name": "PowerShell", "input": {"command": "Get-Date"}},
+        {"type": "tool_use", "id": "t3", "name": "Agent", "input": {"prompt": "no type"}},
+    ]}}
+    _, tools = parse_record(rec, "p")
+    assert [t["target"] for t in tools] == ["Explore", "Get-Date", None]
+
+
 def test_tool_use_without_id_yields_none():
     rec = {"type": "assistant", "uuid": "a", "message": {"content": [
         {"type": "tool_use", "name": "Bash", "input": {"command": "ls"}},

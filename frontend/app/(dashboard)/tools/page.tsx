@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-import { ToolsPlaceholder } from "@/components/placeholders";
+import { ToolsPage } from "@/components/tools/tools-page";
 
 export const metadata: Metadata = { title: "Tools" };
 
-export default function ToolsPage() {
-  return <ToolsPlaceholder />;
+export default function Page() {
+  return <ToolsPage />;
 }

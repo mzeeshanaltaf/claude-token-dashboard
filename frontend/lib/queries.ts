@@ -17,7 +17,10 @@ export type RangedPath =
   | "/api/projects/daily"
   | "/api/projects/{slug}/sessions"
   | "/api/sessions"
-  | "/api/prompts";
+  | "/api/prompts"
+  | "/api/activity/hourly"
+  | "/api/activity/summary"
+  | "/api/tools/insights";
 
 /**
  * Query keys: `[path, rangeKey, extraQuery]` for ranged data, `[path]`
@@ -56,15 +59,22 @@ export function useRangedQuery<P extends RangedPath>(
   });
 }
 
-/** A range-independent GET. */
+/** A range-independent GET. A `query` becomes part of the key (keeps the previous data while it changes). */
 export function useApiQuery<P extends GetPath>(
   path: P,
-  opts?: { refetchInterval?: number; enabled?: boolean; params?: Record<string, string> },
+  opts?: {
+    refetchInterval?: number;
+    enabled?: boolean;
+    params?: Record<string, string>;
+    query?: NonNullable<ApiQuery<P>>;
+  },
 ) {
-  const { params, ...rest } = opts ?? {};
+  const { params, query, ...rest } = opts ?? {};
+  const key = query ? [...queryKeys.plain(path, params ?? {}), query] : queryKeys.plain(path, params);
   return useQuery({
-    queryKey: queryKeys.plain(path, params),
-    queryFn: ({ signal }) => api.get(path, { signal, params }) as Promise<ApiResponse<P>>,
+    queryKey: key,
+    queryFn: ({ signal }) => api.get(path, { signal, params, query }) as Promise<ApiResponse<P>>,
+    ...(query ? { placeholderData: (prev: ApiResponse<P> | undefined) => prev } : {}),
     ...rest,
   });
 }

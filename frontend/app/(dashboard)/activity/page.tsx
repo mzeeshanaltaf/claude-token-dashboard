@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-import { ActivityPlaceholder } from "@/components/placeholders";
+import { ActivityPage } from "@/components/activity/activity-page";
 
 export const metadata: Metadata = { title: "Activity" };
 
-export default function ActivityPage() {
-  return <ActivityPlaceholder />;
+export default function Page() {
+  return <ActivityPage />;
 }

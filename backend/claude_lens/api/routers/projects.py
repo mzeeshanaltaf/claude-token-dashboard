@@ -39,6 +39,11 @@ def _r4(v):
 def projects(rng: DateRange = Depends(date_range),
              conn: psycopg.Connection = Depends(get_conn),
              pricing: dict = Depends(get_pricing)):
+    return projects_with_cost(conn, rng, pricing)
+
+
+def projects_with_cost(conn: psycopg.Connection, rng: DateRange, pricing: dict) -> list[dict]:
+    """Every project with activity in range, priced (also used by the CSV export)."""
     rows = q.project_summary(conn, rng.since, rng.until)
     model_rows = q.project_model_tokens(conn, rng.since, rng.until)
     costs = cost_by_key(model_rows, "project_slug", pricing)
