@@ -56,6 +56,17 @@ export const fmt = {
   },
   /** The model's family, or null for non-Claude ids. */
   modelFamily: (m: string | null | undefined): ModelFamily | null => parseClaudeModel(m)?.family ?? null,
+  /** Milliseconds → "45s", "12m", "2h 14m", "3d 4h". */
+  duration: (ms: number | null | undefined) => {
+    if (ms === null || ms === undefined || !Number.isFinite(ms) || ms < 0) return "—";
+    const s = Math.round(ms / 1000);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    if (h < 48) return `${h}h ${m % 60}m`;
+    return `${Math.floor(h / 24)}d ${h % 24}h`;
+  },
   /** "5h ago", "3d ago", "just now". `now` is injectable for tests. */
   relative: (t: string | Date | null | undefined, now: number = Date.now()) => {
     const d = toDate(t);

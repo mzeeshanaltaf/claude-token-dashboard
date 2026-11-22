@@ -1,4 +1,4 @@
-"""`/api/tips` and `POST /api/tips/dismiss`."""
+"""`/api/tips`, `POST /api/tips/dismiss` and `POST /api/tips/restore`."""
 from __future__ import annotations
 
 import psycopg
@@ -20,5 +20,13 @@ def tips(conn: psycopg.Connection = Depends(get_conn)):
 @router.post("/tips/dismiss", response_model=Ok)
 def dismiss(body: TipDismiss, conn: psycopg.Connection = Depends(get_conn)):
     engine.dismiss_tip(conn, body.key)
+    conn.commit()
+    return Ok()
+
+
+@router.post("/tips/restore", response_model=Ok)
+def restore(body: TipDismiss, conn: psycopg.Connection = Depends(get_conn)):
+    """Undo a dismissal (new in Claude Lens, for the undo toast)."""
+    engine.restore_tip(conn, body.key)
     conn.commit()
     return Ok()

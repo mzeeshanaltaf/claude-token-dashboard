@@ -124,7 +124,8 @@ export interface paths {
         };
         /**
          * Daily
-         * @description Per-day token sums; days are local dates in the `timezone` setting.
+         * @description Per-day token sums and estimated cost (total and per model); days are
+         *     local dates in the `timezone` setting.
          */
         get: operations["daily_api_daily_get"];
         put?: never;
@@ -181,6 +182,28 @@ export interface paths {
          * @description `tokens_per_call` is the SKILL.md size from `skill_catalog` (null when unknown).
          */
         get: operations["skills_api_skills_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Projects Daily
+         * @description Estimated cost per (project, local day) for the projects list's sparklines.
+         *
+         *     Days with no priced activity are absent; days are in the `timezone` setting.
+         */
+        get: operations["projects_daily_api_projects_daily_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -320,6 +343,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tips/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore
+         * @description Undo a dismissal (new in Claude Lens, for the undo toast).
+         */
+        post: operations["restore_api_tips_restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plan": {
         parameters: {
             query?: never;
@@ -396,6 +439,10 @@ export interface components {
              * Format: date
              */
             day: string;
+            /** Sessions */
+            sessions: number;
+            /** Turns */
+            turns: number;
             /** Input Tokens */
             input_tokens: number;
             /** Output Tokens */
@@ -404,6 +451,12 @@ export interface components {
             cache_read_tokens: number;
             /** Cache Create Tokens */
             cache_create_tokens: number;
+            /** Cost Usd */
+            cost_usd: number;
+            /** Cost By Model */
+            cost_by_model: {
+                [key: string]: number;
+            };
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -534,6 +587,21 @@ export interface components {
         PlanUpdate: {
             /** Plan */
             plan: string;
+        };
+        /**
+         * ProjectDailyCost
+         * @description New in Claude Lens (phase 05): one project's estimated cost on one local day.
+         */
+        ProjectDailyCost: {
+            /** Project Slug */
+            project_slug: string;
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Cost Usd */
+            cost_usd: number;
         };
         /** ProjectRow */
         ProjectRow: {
@@ -1052,6 +1120,8 @@ export interface operations {
     overview_api_overview_get: {
         parameters: {
             query?: {
+                /** @description only this project slug (new in Claude Lens) */
+                project?: string | null;
                 /** @description ISO 8601, inclusive (no offset = UTC) */
                 since?: string | null;
                 /** @description ISO 8601, exclusive (no offset = UTC) */
@@ -1093,6 +1163,8 @@ export interface operations {
     daily_api_daily_get: {
         parameters: {
             query?: {
+                /** @description only this project slug (new in Claude Lens) */
+                project?: string | null;
                 /** @description ISO 8601, inclusive (no offset = UTC) */
                 since?: string | null;
                 /** @description ISO 8601, exclusive (no offset = UTC) */
@@ -1134,6 +1206,8 @@ export interface operations {
     by_model_api_by_model_get: {
         parameters: {
             query?: {
+                /** @description only this project slug (new in Claude Lens) */
+                project?: string | null;
                 /** @description ISO 8601, inclusive (no offset = UTC) */
                 since?: string | null;
                 /** @description ISO 8601, exclusive (no offset = UTC) */
@@ -1234,6 +1308,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SkillRow"][];
+                };
+            };
+            /** @description not logged in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    projects_daily_api_projects_daily_get: {
+        parameters: {
+            query?: {
+                /** @description ISO 8601, inclusive (no offset = UTC) */
+                since?: string | null;
+                /** @description ISO 8601, exclusive (no offset = UTC) */
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectDailyCost"][];
                 };
             };
             /** @description not logged in */
@@ -1510,6 +1625,46 @@ export interface operations {
         };
     };
     dismiss_api_tips_dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TipDismiss"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ok"];
+                };
+            };
+            /** @description not logged in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_api_tips_restore_post: {
         parameters: {
             query?: never;
             header?: never;

@@ -14,6 +14,8 @@ export type RangedPath =
   | "/api/tools"
   | "/api/skills"
   | "/api/projects"
+  | "/api/projects/daily"
+  | "/api/projects/{slug}/sessions"
   | "/api/sessions"
   | "/api/prompts";
 
@@ -22,8 +24,9 @@ export type RangedPath =
  * otherwise. Invalidate by path prefix: `queryClient.invalidateQueries({ queryKey: ["/api/settings"] })`.
  */
 export const queryKeys = {
-  ranged: (path: RangedPath, rangeKey: string, query?: object) => [path, rangeKey, query ?? {}] as const,
-  plain: (path: GetPath) => [path] as const,
+  ranged: (path: RangedPath, rangeKey: string, query?: object, params?: object) =>
+    (params ? [path, rangeKey, query ?? {}, params] : [path, rangeKey, query ?? {}]) as readonly unknown[],
+  plain: (path: GetPath, params?: object) => (params ? [path, params] : [path]) as readonly unknown[],
 };
 
 /**
@@ -36,22 +39,32 @@ export const queryKeys = {
 export function useRangedQuery<P extends RangedPath>(
   path: P,
   query?: Omit<NonNullable<ApiQuery<P>>, "since" | "until">,
+  opts?: { params?: Record<string, string>; enabled?: boolean },
 ) {
   const { range, key } = useRange();
   return useQuery({
-    queryKey: queryKeys.ranged(path, key, query),
+    queryKey: queryKeys.ranged(path, key, query, opts?.params),
     queryFn: ({ signal }) =>
       // The spread can't be checked against the per-path union; P constrains it.
-      api.get(path, { query: { ...query, ...rangeToApi(range) } as never, signal }) as Promise<ApiResponse<P>>,
+      api.get(path, {
+        query: { ...query, ...rangeToApi(range) } as never,
+        params: opts?.params,
+        signal,
+      }) as Promise<ApiResponse<P>>,
     placeholderData: (prev) => prev,
+    enabled: opts?.enabled,
   });
 }
 
 /** A range-independent GET. */
-export function useApiQuery<P extends GetPath>(path: P, opts?: { refetchInterval?: number; enabled?: boolean }) {
+export function useApiQuery<P extends GetPath>(
+  path: P,
+  opts?: { refetchInterval?: number; enabled?: boolean; params?: Record<string, string> },
+) {
+  const { params, ...rest } = opts ?? {};
   return useQuery({
-    queryKey: queryKeys.plain(path),
-    queryFn: ({ signal }) => api.get(path, { signal }) as Promise<ApiResponse<P>>,
-    ...opts,
+    queryKey: queryKeys.plain(path, params),
+    queryFn: ({ signal }) => api.get(path, { signal, params }) as Promise<ApiResponse<P>>,
+    ...rest,
   });
 }

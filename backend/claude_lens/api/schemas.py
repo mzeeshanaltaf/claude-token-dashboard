@@ -48,10 +48,16 @@ class Overview(BaseModel):
 
 class DailyRow(BaseModel):
     day: date  # local date in the configured timezone
+    sessions: int  # new in Claude Lens (phase 05): sessions active that day
+    turns: int  # new in Claude Lens (phase 05): user prompts that day
     input_tokens: int
     output_tokens: int
     cache_read_tokens: int
     cache_create_tokens: int
+    # new in Claude Lens (phase 05): the day's estimated cost, total and per model
+    # (unpriced models are left out of both)
+    cost_usd: float
+    cost_by_model: dict[str, float]
 
 
 class ModelRow(BaseModel):
@@ -103,6 +109,13 @@ class ProjectRow(BaseModel):
     cost_cache_create_5m_usd: Usd = None
     cost_cache_create_1h_usd: Usd = None
     cost_cache_write_usd: Usd = None
+
+
+class ProjectDailyCost(BaseModel):
+    """New in Claude Lens (phase 05): one project's estimated cost on one local day."""
+    project_slug: str
+    day: date
+    cost_usd: float
 
 
 class ProjectSessionRow(BaseModel):

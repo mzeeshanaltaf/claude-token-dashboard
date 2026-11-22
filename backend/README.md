@@ -78,10 +78,15 @@ ignored). For local `http://` use, set `COOKIE_SECURE=false`.
 - **CSRF:** every non-GET request must be `Content-Type: application/json`, and an `Origin`
   header, if sent, must match `Host` or `X-Forwarded-Host`.
 - **Endpoints** (all need a login except `health` and `auth/login`/`logout`): `overview`,
-  `daily`, `by-model`, `tools`, `skills`, `projects`, `projects/{slug}/sessions`,
-  `sessions`, `sessions/{id}`, `prompts`, `tips`, `POST tips/dismiss`, `GET/POST plan`,
-  `GET/POST settings`, `sync-status`, `health`. Range filters are `since` (inclusive) and
-  `until` (exclusive), ISO 8601; no offset means UTC.
+  `daily`, `by-model`, `tools`, `skills`, `projects`, `projects/daily`,
+  `projects/{slug}/sessions`, `sessions`, `sessions/{id}`, `prompts`, `tips`,
+  `POST tips/dismiss`, `POST tips/restore`, `GET/POST plan`, `GET/POST settings`,
+  `sync-status`, `health`. Range filters are `since` (inclusive) and `until` (exclusive),
+  ISO 8601; no offset means UTC. `overview`, `daily` and `by-model` also take `project`
+  (a slug) to scope them to one project.
+- **Daily rows** carry `sessions`, `turns`, the token sums, and the day's `cost_usd` plus
+  `cost_by_model` (unpriced models are left out). `projects/daily` is
+  `[{project_slug, day, cost_usd}]` for the projects list's sparklines.
 - **Pagination:** `sessions` and `prompts` take `page`, `page_size` (≤ 200), `sort`, `order`
   (`asc`/`desc`), `q`, `project`, `model`, and return `{items, total, page, page_size}`.
 - **Pricing** is read from `backend/pricing.json` and reloaded when its mtime changes.

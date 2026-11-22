@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-import { TipsPlaceholder } from "@/components/placeholders";
+import { TipsPage } from "@/components/tips/tips-page";
 
 export const metadata: Metadata = { title: "Tips" };
 
-export default function TipsPage() {
-  return <TipsPlaceholder />;
+export default function Page() {
+  return <TipsPage />;
 }

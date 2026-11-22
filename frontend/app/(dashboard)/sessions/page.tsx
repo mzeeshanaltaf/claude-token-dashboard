@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-import { SessionsPlaceholder } from "@/components/placeholders";
+import { SessionsPage } from "@/components/sessions/sessions-page";
 
 export const metadata: Metadata = { title: "Sessions" };
 
-export default function SessionsPage() {
-  return <SessionsPlaceholder />;
+export default function Page() {
+  return <SessionsPage />;
 }

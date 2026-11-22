@@ -11,8 +11,8 @@
  * The signature accent is the legacy dashboard blue (#4A9EFF), with violet
  * (#7C5CFF) as its partner in the logo gradient.
  *
- * Data colours are fixed across themes so a series means the same thing
- * everywhere:
+ * Data colours keep their hue across themes so a series means the same thing
+ * everywhere (dark mode uses its own validated steps, see `.dark`):
  *   --chart-input / --chart-output / --chart-cache-write / --chart-cache-read
  *     token types (from the old web/style.css palette)
  *   --family-opus / sonnet / fable / haiku / mythos
@@ -77,7 +77,7 @@
 }
 
 :root {
-  /* data colours: identical in both themes */
+  /* data colours (light steps; .dark overrides with its own) */
   --chart-input: #4a9eff;
   --chart-output: #7c5cff;
   --chart-cache-write: #e8a23b;
@@ -157,6 +157,22 @@
   --sidebar-border: oklch(0.27 0.015 250);
   --sidebar-ring: oklch(0.7 0.155 252 / 0.6);
   --glow: oklch(0.7 0.155 252 / 0.09);
+
+  /*
+   * Dark-mode steps of the same hues (phase 05). The light values sat above
+   * the dark lightness band (OKLCH L 0.48–0.67), and simply darkening the
+   * blue collapsed it into the violet under deutan. Blue sits high and violet
+   * low in the band. Checked with the dataviz validator against the dark card:
+   * every check passes, worst adjacent CVD ΔE 9.1, normal-vision ΔE 16.5.
+   */
+  --chart-input: #4596f5;
+  --chart-output: #7350e8;
+  --chart-cache-write: #c48628;
+  --chart-cache-read: #36a07a;
+  --family-opus: #7350e8;
+  --family-sonnet: #4596f5;
+  --family-fable: #c48628;
+  --family-haiku: #36a07a;
 }
 
 @layer base {

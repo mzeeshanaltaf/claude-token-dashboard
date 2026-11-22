@@ -248,6 +248,25 @@ def test_daily_buckets_by_timezone(db):
     assert day("America/New_York") == "2026-04-10"
 
 
+def test_daily_model_tokens(seeded):
+    rows = analytics.daily_model_tokens(seeded)
+    got = {(r["day"].isoformat(), r["model"]): r["input_tokens"] for r in rows}
+    assert got == {("2026-04-10", "claude-opus-4-7"): 100, ("2026-04-11", "claude-sonnet-4-6"): 5}
+    per_project = analytics.daily_model_tokens(seeded, by_project=True)
+    assert {(r["project_slug"], r["day"].isoformat()) for r in per_project} == {
+        ("projA", "2026-04-10"), ("projB", "2026-04-11")}
+    only_b = analytics.daily_model_tokens(seeded, project="projB")
+    assert [r["model"] for r in only_b] == ["claude-sonnet-4-6"]
+
+
+def test_cost_by_model_per_key(seeded):
+    from claude_lens.core.costs import cost_by_model_per_key
+    rows = analytics.daily_model_tokens(seeded, by_project=True)
+    costs = cost_by_model_per_key(rows, ("project_slug", "day"), PRICING)
+    key = ("projA", ts("2026-04-10T00:00:00Z").date())
+    assert set(costs[key]) == {"claude-opus-4-7"} and costs[key]["claude-opus-4-7"] > 0
+
+
 def test_model_breakdown_respects_since_and_groups(seeded):
     models = {r["model"]: r for r in analytics.model_breakdown(seeded)}
     assert set(models) == {"claude-opus-4-7", "claude-sonnet-4-6"}

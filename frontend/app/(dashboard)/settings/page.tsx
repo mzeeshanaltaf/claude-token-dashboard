@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-import { SettingsPlaceholder } from "@/components/placeholders";
+import { SettingsClient } from "@/components/settings/settings-client";
 
 export const metadata: Metadata = { title: "Settings" };
 
-export default function SettingsPage() {
-  return <SettingsPlaceholder />;
+export default function Page() {
+  return <SettingsClient />;
 }

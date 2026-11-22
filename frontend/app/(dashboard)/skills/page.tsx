@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-import { SkillsPlaceholder } from "@/components/placeholders";
+import { SkillsPage } from "@/components/skills/skills-page";
 
 export const metadata: Metadata = { title: "Skills" };
 
-export default function SkillsPage() {
-  return <SkillsPlaceholder />;
+export default function Page() {
+  return <SkillsPage />;
 }

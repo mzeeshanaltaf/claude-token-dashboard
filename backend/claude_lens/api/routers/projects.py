@@ -1,16 +1,34 @@
-"""`/api/projects` and `/api/projects/{slug}/sessions`."""
+"""`/api/projects`, `/api/projects/daily` and `/api/projects/{slug}/sessions`."""
 from __future__ import annotations
 
 import psycopg
 from fastapi import APIRouter, Depends
 
-from ...core.costs import cost_breakdown_by_key, cost_by_key
+from ...core.costs import cost_breakdown_by_key, cost_by_key, cost_by_model_per_key
 from ...db.queries import projects as q
+from ...db.queries.analytics import daily_model_tokens
 from ...db.queries.sessions import session_model_tokens
+from ...db.queries.settings import get_timezone
 from ..deps import DateRange, date_range, get_conn, get_pricing
-from ..schemas import ProjectRow, ProjectSessionRow
+from ..schemas import ProjectDailyCost, ProjectRow, ProjectSessionRow
 
 router = APIRouter(tags=["projects"])
+
+
+@router.get("/projects/daily", response_model=list[ProjectDailyCost])
+def projects_daily(rng: DateRange = Depends(date_range),
+                   conn: psycopg.Connection = Depends(get_conn),
+                   pricing: dict = Depends(get_pricing)):
+    """Estimated cost per (project, local day) for the projects list's sparklines.
+
+    Days with no priced activity are absent; days are in the `timezone` setting.
+    """
+    rows = daily_model_tokens(conn, rng.since, rng.until, tz=get_timezone(conn), by_project=True)
+    costs = cost_by_model_per_key(rows, ("project_slug", "day"), pricing)
+    out = [{"project_slug": slug, "day": day, "cost_usd": round(sum(models.values()), 4)}
+           for (slug, day), models in costs.items()]
+    out.sort(key=lambda r: (r["project_slug"], r["day"]))
+    return out
 
 
 def _r4(v):

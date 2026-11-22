@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-import { PromptsPlaceholder } from "@/components/placeholders";
+import { PromptsPage } from "@/components/prompts/prompts-page";
 
 export const metadata: Metadata = { title: "Prompts" };
 
-export default function PromptsPage() {
-  return <PromptsPlaceholder />;
+export default function Page() {
+  return <PromptsPage />;
 }

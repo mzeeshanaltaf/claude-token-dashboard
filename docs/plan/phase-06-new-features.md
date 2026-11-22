@@ -23,6 +23,13 @@ cd frontend && pnpm build
 - `backend/claude_lens/db/migrations/001_init.sql`: the columns available (`git_branch`, `is_sidechain`, `agent_id`, `tool_calls_json`, `tool_calls.target`, `tool_use_id`, `is_error`, `prompt_tsv`)
 - `backend/claude_lens/collector/parse.py`: `_TARGET_FIELDS`, i.e. which tool stores what in `target` (Task stores `subagent_type`)
 - The `dataviz` skill
+- `frontend/README.md` § Page patterns (written in phase 05): URL state, `DataTable`, filters, the chart components and their data helpers.
+
+**Notes from phase 05** (they override the tasks below where they conflict):
+- Per-day cost already exists: `/api/daily` rows carry `cost_usd`, `cost_by_model`, `sessions` and `turns`, built by `analytics.daily_model_tokens` + `core.costs.cost_by_model_per_key`. Reuse them for `/api/activity/calendar` instead of a second cost rollup.
+- **A calendar-day link is `/sessions?since=<day>&until=<day>`.** The frontend's custom-range `until` is an **inclusive** local day (phase 04); `rangeToApi()` adds the day itself. `until=<day+1>` would show two days.
+- The session page's turn table (`components/sessions/session-detail.tsx`) is client-paginated (100 rows) and defaults to **Turns** (prompts + assistant turns; tool-result/attachment records behind "All records"). "Scroll to that turn" must switch to the right page (and filter) first.
+- `/tools` and `/activity` still render `components/placeholders.tsx`; delete that file when both are built.
 
 ## 1. Activity insights (`/activity`)
 

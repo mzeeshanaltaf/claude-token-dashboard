@@ -95,6 +95,23 @@ def turn_cost(row: Mapping, pricing: dict, ndigits: int = 6) -> dict:
     }
 
 
+def cost_by_model_per_key(model_rows: Iterable[Mapping], key, pricing: dict) -> dict:
+    """{key_value: {model: usd}} over per-(key, model) token rows.
+
+    `key` is a column name or a tuple of them (the dict key is then a tuple).
+    Unpriced models are left out, as in `cost_by_key`.
+    """
+    out: dict = {}
+    for m in model_rows:
+        c = cost_for(m["model"], usage_of(m), pricing)
+        if c["usd"] is None:
+            continue
+        k = tuple(m[x] for x in key) if isinstance(key, tuple) else m[key]
+        models = out.setdefault(k, {})
+        models[m["model"]] = models.get(m["model"], 0.0) + c["usd"]
+    return out
+
+
 # --------------------------------------------------------------------------
 # the same formula in SQL, for ORDER BY cost
 # --------------------------------------------------------------------------

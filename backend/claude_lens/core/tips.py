@@ -44,6 +44,11 @@ def dismiss_tip(conn: psycopg.Connection, key: str) -> None:
     )
 
 
+def restore_tip(conn: psycopg.Connection, key: str) -> None:
+    """Undo a dismissal (the Tips page's undo toast). A no-op for unknown keys."""
+    conn.execute("DELETE FROM dismissed_tips WHERE tip_key = %(k)s", {"k": key})
+
+
 def _dismissed(conn, dismissed: Optional[set]) -> set:
     return dismissed_keys(conn) if dismissed is None else dismissed
 

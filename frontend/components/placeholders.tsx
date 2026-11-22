@@ -1,9 +1,8 @@
 "use client";
 
 /**
- * Phase 04 placeholders: each route renders one or two real numbers from its
- * endpoint to prove the proxy → backend → Postgres path and the range wiring.
- * Phase 05/06 replace these with the real pages.
+ * Placeholders for the pages phase 06 builds (Activity, Tools): each shows a
+ * couple of real numbers for the range. Phase 05 replaced the others.
  */
 import { ConstructionIcon } from "lucide-react";
 
@@ -13,7 +12,7 @@ import { KpiCard } from "@/components/kpi-card";
 import { KpiGridSkeleton } from "@/components/loading";
 import { useRange } from "@/hooks/use-range";
 import { fmt } from "@/lib/format";
-import { useApiQuery, useRangedQuery } from "@/lib/queries";
+import { useRangedQuery } from "@/lib/queries";
 import { rangeLabel } from "@/lib/range";
 
 function Grid({ children }: { children: React.ReactNode }) {
@@ -34,43 +33,6 @@ function ComingSoon({ page }: { page: string }) {
 function RangeNote() {
   const { range } = useRange();
   return <span>{rangeLabel(range)}</span>;
-}
-
-export function OverviewPlaceholder() {
-  const overview = useRangedQuery("/api/overview");
-  const daily = useRangedQuery("/api/daily");
-  if (overview.isError) return <ErrorState error={overview.error} onRetry={() => overview.refetch()} />;
-  if (!overview.data) return <KpiGridSkeleton />;
-  const o = overview.data;
-  const days = daily.data ?? [];
-  return (
-    <>
-      <Grid>
-        <KpiCard
-          label="Est. cost"
-          value={fmt.usd(o.cost_usd)}
-          sub={<RangeNote />}
-          info="API-rate cost of every assistant turn in range, from pricing.json."
-        />
-        <KpiCard label="Sessions" value={fmt.int(o.sessions)} sub={`${fmt.int(o.projects)} projects`} />
-        <KpiCard
-          label="Output tokens"
-          value={fmt.compact(o.output_tokens)}
-          sub={`${fmt.int(o.turns)} turns`}
-          sparkline={days.map((d) => d.output_tokens)}
-          sparkColor="var(--chart-output)"
-        />
-        <KpiCard
-          label="Cache read"
-          value={fmt.compact(o.cache_read_tokens)}
-          sub={`${fmt.compact(o.input_tokens)} fresh input`}
-          sparkline={days.map((d) => d.cache_read_tokens)}
-          sparkColor="var(--chart-cache-read)"
-        />
-      </Grid>
-      <ComingSoon page="Overview" />
-    </>
-  );
 }
 
 export function ActivityPlaceholder() {
@@ -100,76 +62,6 @@ export function ActivityPlaceholder() {
   );
 }
 
-export function PromptsPlaceholder() {
-  const prompts = useRangedQuery("/api/prompts", { page_size: 1, sort: "cost" });
-  if (prompts.isError) return <ErrorState error={prompts.error} onRetry={() => prompts.refetch()} />;
-  if (!prompts.data) return <KpiGridSkeleton count={2} />;
-  const top = prompts.data.items[0];
-  return (
-    <>
-      <Grid>
-        <KpiCard label="Prompts" value={fmt.int(prompts.data.total)} sub={<RangeNote />} />
-        <KpiCard
-          className="sm:col-span-1 xl:col-span-3"
-          label="Most expensive prompt"
-          value={top ? fmt.usd(top.estimated_cost_usd) : "—"}
-          sub={top ? <span className="blur-sensitive">{fmt.short(top.prompt_text, 140)}</span> : "No prompts in range"}
-        />
-      </Grid>
-      <ComingSoon page="Prompts" />
-    </>
-  );
-}
-
-export function SessionsPlaceholder() {
-  const sessions = useRangedQuery("/api/sessions", { page_size: 1 });
-  if (sessions.isError) return <ErrorState error={sessions.error} onRetry={() => sessions.refetch()} />;
-  if (!sessions.data) return <KpiGridSkeleton count={2} />;
-  const latest = sessions.data.items[0];
-  return (
-    <>
-      <Grid>
-        <KpiCard label="Sessions" value={fmt.int(sessions.data.total)} sub={<RangeNote />} />
-        <KpiCard
-          className="xl:col-span-3"
-          label="Latest session"
-          value={latest ? fmt.ts(latest.ended) : "—"}
-          sub={
-            latest ? (
-              <span className="blur-sensitive">
-                {latest.project_name} · {fmt.short(latest.title ?? latest.session_id, 100)}
-              </span>
-            ) : (
-              "No sessions in range"
-            )
-          }
-        />
-      </Grid>
-      <ComingSoon page="Sessions" />
-    </>
-  );
-}
-
-export function ProjectsPlaceholder() {
-  const projects = useRangedQuery("/api/projects");
-  if (projects.isError) return <ErrorState error={projects.error} onRetry={() => projects.refetch()} />;
-  if (!projects.data) return <KpiGridSkeleton count={2} />;
-  const top = [...projects.data].sort((a, b) => (b.estimated_cost_usd ?? 0) - (a.estimated_cost_usd ?? 0))[0];
-  return (
-    <>
-      <Grid>
-        <KpiCard label="Projects" value={fmt.int(projects.data.length)} sub={<RangeNote />} />
-        <KpiCard
-          label="Top project by cost"
-          value={top ? fmt.usd(top.estimated_cost_usd) : "—"}
-          sub={top ? <span className="blur-sensitive">{top.project_name}</span> : undefined}
-        />
-      </Grid>
-      <ComingSoon page="Projects" />
-    </>
-  );
-}
-
 export function ToolsPlaceholder() {
   const tools = useRangedQuery("/api/tools");
   if (tools.isError) return <ErrorState error={tools.error} onRetry={() => tools.refetch()} />;
@@ -183,56 +75,6 @@ export function ToolsPlaceholder() {
         <KpiCard label="Distinct tools" value={fmt.int(tools.data.length)} sub={top ? `Most used: ${top.tool_name}` : undefined} />
       </Grid>
       <ComingSoon page="Tools" />
-    </>
-  );
-}
-
-export function SkillsPlaceholder() {
-  const skills = useRangedQuery("/api/skills");
-  if (skills.isError) return <ErrorState error={skills.error} onRetry={() => skills.refetch()} />;
-  if (!skills.data) return <KpiGridSkeleton count={2} />;
-  const invocations = skills.data.reduce((s, k) => s + k.invocations, 0);
-  return (
-    <>
-      <Grid>
-        <KpiCard label="Skills used" value={fmt.int(skills.data.length)} sub={<RangeNote />} />
-        <KpiCard label="Invocations" value={fmt.int(invocations)} />
-      </Grid>
-      <ComingSoon page="Skills" />
-    </>
-  );
-}
-
-export function TipsPlaceholder() {
-  const tips = useApiQuery("/api/tips");
-  if (tips.isError) return <ErrorState error={tips.error} onRetry={() => tips.refetch()} />;
-  if (!tips.data) return <KpiGridSkeleton count={1} />;
-  return (
-    <>
-      <Grid>
-        <KpiCard label="Open tips" value={fmt.int(tips.data.length)} sub={tips.data[0]?.title} />
-      </Grid>
-      <ComingSoon page="Tips" />
-    </>
-  );
-}
-
-export function SettingsPlaceholder() {
-  const settings = useApiQuery("/api/settings");
-  const plan = useApiQuery("/api/plan");
-  if (settings.isError) return <ErrorState error={settings.error} onRetry={() => settings.refetch()} />;
-  if (!settings.data) return <KpiGridSkeleton count={2} />;
-  const plans = (plan.data?.pricing?.plans ?? {}) as Record<string, { label?: string }>;
-  const key = settings.data.plan;
-  return (
-    <>
-      <Grid>
-        <KpiCard label="Plan" value={key ? (plans[key]?.label ?? key) : "Not set"} />
-        <KpiCard label="Timezone" value={settings.data.timezone} sub="Used for daily buckets" />
-      </Grid>
-      <div id="password">
-        <ComingSoon page="Settings" />
-      </div>
     </>
   );
 }

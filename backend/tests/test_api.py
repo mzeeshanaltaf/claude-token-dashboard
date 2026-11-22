@@ -138,6 +138,34 @@ def test_daily_uses_timezone_setting(seeded):
     assert days == ["2026-04-18", "2026-04-19"]  # both events are just after UTC midnight
 
 
+def test_daily_carries_cost(seeded):
+    days = {r["day"]: r for r in seeded.get("/api/daily").json()}
+    assert days["2026-04-19"]["cost_usd"] == round(HAIKU_TURN, 4)
+    assert days["2026-04-19"]["cost_by_model"] == {"claude-haiku-4-5": round(HAIKU_TURN, 4)}
+    assert (days["2026-04-19"]["sessions"], days["2026-04-19"]["turns"]) == (1, 1)
+    # an unpriced model contributes nothing, but the day is still listed
+    assert days["2026-04-20"]["cost_usd"] == 0 and days["2026-04-20"]["cost_by_model"] == {}
+    total = seeded.get("/api/overview").json()["cost_usd"]
+    assert sum(d["cost_usd"] for d in days.values()) == pytest.approx(total)
+
+
+def test_project_filter_on_overview_daily_by_model(seeded):
+    o = seeded.get("/api/overview", params={"project": "q"}).json()
+    assert (o["sessions"], o["projects"], o["output_tokens"], o["cost_usd"]) == (1, 1, 7, 0)
+    o = seeded.get("/api/overview", params={"project": "p"}).json()
+    assert o["cost_usd"] == round(HAIKU_TURN, 4) and o["input_tokens"] == 1000
+    assert [r["day"] for r in seeded.get("/api/daily", params={"project": "p"}).json()] == ["2026-04-19"]
+    assert [r["model"] for r in seeded.get("/api/by-model", params={"project": "q"}).json()] == ["mystery-model"]
+    # an empty value means "no filter"
+    assert seeded.get("/api/overview", params={"project": ""}).json()["sessions"] == 2
+
+
+def test_projects_daily(seeded):
+    rows = seeded.get("/api/projects/daily").json()
+    assert rows == [{"project_slug": "p", "day": "2026-04-19", "cost_usd": round(HAIKU_TURN, 4)}]
+    assert seeded.get("/api/projects/daily", params={"since": "2026-04-20T00:00:00Z"}).json() == []
+
+
 def test_tools_and_skills(seeded, db):
     assert seeded.get("/api/tools").json() == [
         {"tool_name": "Read", "calls": 1, "result_tokens": 0}]
@@ -179,6 +207,10 @@ def test_tips_and_dismiss(client, db):
     assert client.post("/api/tips/dismiss", json={"key": "cache:projZ"}).json() == {"ok": True}
     assert client.get("/api/tips").json() == []
     assert client.post("/api/tips/dismiss", json={"key": ""}).status_code == 422
+    # undo
+    assert client.post("/api/tips/restore", json={"key": "cache:projZ"}).json() == {"ok": True}
+    assert [t["key"] for t in client.get("/api/tips").json()] == ["cache:projZ"]
+    assert client.post("/api/tips/restore", json={"key": "never-dismissed"}).status_code == 200
 
 
 def test_sync_status(client, db):
@@ -198,8 +230,10 @@ def test_openapi_lists_every_endpoint(anon):
     expected = {
         "/api/health", "/api/auth/login", "/api/auth/logout", "/api/auth/me",
         "/api/auth/password", "/api/overview", "/api/daily", "/api/by-model", "/api/tools",
-        "/api/skills", "/api/projects", "/api/projects/{slug}/sessions", "/api/sessions",
+        "/api/skills", "/api/projects", "/api/projects/daily", "/api/projects/{slug}/sessions",
+        "/api/sessions",
         "/api/sessions/{session_id}", "/api/prompts", "/api/tips", "/api/tips/dismiss",
+        "/api/tips/restore",
         "/api/plan", "/api/settings", "/api/sync-status",
     }
     assert set(paths) == expected

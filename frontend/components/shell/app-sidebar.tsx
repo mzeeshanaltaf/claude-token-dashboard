@@ -20,8 +20,12 @@ import {
 import { MAIN_NAV, SETTINGS_NAV, type NavItem } from "@/lib/nav";
 import { RANGE_PARAM_NAMES } from "@/lib/range";
 
-function NavLinks({ items, rangeQuery }: { items: NavItem[]; rangeQuery: string }) {
-  const pathname = usePathname();
+/**
+ * Pure: the pathname comes in as a prop. On dynamic routes (/sessions/[id])
+ * the pathname is URL data, so only components inside <Suspense> may read it
+ * (phase 05); the fallbacks render with no active item.
+ */
+function NavLinks({ items, rangeQuery, pathname }: { items: NavItem[]; rangeQuery: string; pathname: string }) {
   return (
     <SidebarMenu>
       {items.map((item) => {
@@ -45,12 +49,17 @@ function NavLinks({ items, rangeQuery }: { items: NavItem[]; rangeQuery: string 
 /** Carries the URL's range across pages, so a shared link keeps its range. */
 function RangedNavLinks({ items }: { items: NavItem[] }) {
   const params = useSearchParams();
+  const pathname = usePathname();
   const keep = new URLSearchParams();
   for (const name of RANGE_PARAM_NAMES) {
     const v = params.get(name);
     if (v) keep.set(name, v);
   }
-  return <NavLinks items={items} rangeQuery={keep.toString()} />;
+  return <NavLinks items={items} rangeQuery={keep.toString()} pathname={pathname} />;
+}
+
+function PathNavLinks({ items }: { items: NavItem[] }) {
+  return <NavLinks items={items} rangeQuery="" pathname={usePathname()} />;
 }
 
 export function AppSidebar() {
@@ -74,14 +83,16 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
-            <Suspense fallback={<NavLinks items={MAIN_NAV} rangeQuery="" />}>
+            <Suspense fallback={<NavLinks items={MAIN_NAV} rangeQuery="" pathname="" />}>
               <RangedNavLinks items={MAIN_NAV} />
             </Suspense>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <NavLinks items={[SETTINGS_NAV]} rangeQuery="" />
+        <Suspense fallback={<NavLinks items={[SETTINGS_NAV]} rangeQuery="" pathname="" />}>
+          <PathNavLinks items={[SETTINGS_NAV]} />
+        </Suspense>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

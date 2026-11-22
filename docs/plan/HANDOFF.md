@@ -11,7 +11,7 @@ The living state of the redesign. Read it at the **start** of every session, aft
 | 02 | SQLite migration & daily sync task | done | 2026-11-22 | 2026-11-22 | parity ok (30/30); daily task live, run #2 ok; 145 backend tests |
 | 03 | FastAPI API & auth | done | 2026-11-22 | 2026-11-22 | 235 backend tests; overview totals = old app exactly ($6,438.7082) |
 | 04 | Frontend shell & login | done | 2026-11-22 | 2026-11-22 | lint + build clean; 26/26 browser checks, no hydration warnings |
-| 05 | Frontend core pages | not-started | | | |
+| 05 | Frontend core pages | done | 2026-11-22 | 2026-11-22 | lint + build clean; old vs new match exactly at a common cutoff; 25/25 browser checks |
 | 06 | New features | not-started | | | |
 | 07 | Deployment, docs & cleanup | not-started | | | |
 
@@ -19,21 +19,21 @@ Status values: `not-started` · `in-progress` · `blocked` · `done`
 
 ## Baton (replace this section at the end of every session)
 
-- **Current phase:** 04 is done. Next is 05.
-- **Last commit:** `b44dd0a feat(frontend): next.js shell, login, api proxy and date-range plumbing` (phase 04), pushed to `mzeeshanaltaf/main`, plus a docs follow-up that records this hash.
+- **Current phase:** 05 is done. Next is 06.
+- **Last commit:** `2fd814c docs(plan): record phase 04 commit in handoff`. **Phase 05 is uncommitted** (suggested message in the session log).
 - **What works:**
-  - `frontend/` (Next 16.4.6, React 19.3, shadcn radix-nova, Tailwind v4, TanStack Query). `pnpm lint` and `pnpm build` are clean;
-  - the runtime `/api/*` proxy to `BACKEND_URL`, the `proxy.ts` cookie gate, and the login page (fetch path plus a no-JS `/login/submit` fallback);
-  - the shell: a collapsible sidebar, top bar, range picker (URL plus localStorage), synced badge, Cmd+K (navigation only), Ctrl+B privacy blur, user menu (theme, change password → Settings, log out) and the first-run plan dialog;
-  - `lib/format.ts`, `lib/models.ts`, `lib/chart-colors.ts`, `kpi-card`, `empty-state`, `error-state`, `loading`;
-  - every route (`/overview`, `/activity`, `/prompts`, `/sessions`, `/projects`, `/tools`, `/skills`, `/tips`, `/settings`) is a placeholder in `components/placeholders.tsx` that shows real numbers;
-  - backend: unchanged; 235 tests as of phase 03. The old app is untouched.
+  - the redesigned Overview, Prompts, Sessions (list + `/sessions/[id]`), Projects (list + `/projects/[slug]`), Skills, Tips and Settings pages; `pnpm lint` and `pnpm build` are clean (detail routes build as `◐`);
+  - backend additions (see Decisions): `/api/daily` per-day `sessions`/`turns`/`cost_usd`/`cost_by_model`, a `project` filter on overview/daily/by-model, `GET /api/projects/daily`, `POST /api/tips/restore`;
+  - shared frontend pieces for phase 06: `DataTable` (TanStack Table v8), URL-state hooks, filters, `TokenComposition`, `DailyChart`, `ModelMix`, `BarList`, `Sparkline`, `InfoTip` + `lib/glossary.ts`, `lib/usage.ts`. All are documented in `frontend/README.md` § Page patterns;
+  - the old app is untouched (85 tests OK).
 - **What doesn't / open issues:**
-  - carried over: `sync_runs` stays `running` after the final retry fails (phase 01); `tool_use_id = NULL` on migrated rows (phase 02); `core/names.py` slug walk-up rarely matches on this PC (phase 00/03; see Decisions);
-  - the first-run plan dialog was not seen live (the real `settings.plan` is already `"pro"`). It's typed and builds, but is untested in a browser;
-  - the sidebar's collapsed state isn't remembered across reloads (reading its cookie on the server would make the shell dynamic);
-  - `/api/daily` has no cost column, so phase 05's cost sparkline needs a backend addition (see the session log).
-- **Exact next step:** start phase 05 with `phase-05-frontend-core-pages.md`. Run the backend with `COOKIE_SECURE=false TRUST_PROXY=true`, then `cd frontend && pnpm dev`. Replace `components/placeholders.tsx` page by page, and read `frontend/README.md` § Conventions first.
+  - carried over: `sync_runs` stays `running` after the final retry fails (phase 01); `tool_use_id = NULL` on migrated rows (phase 02); `core/names.py` slug walk-up rarely matches on this PC (phase 00/03);
+  - the first-run plan dialog is still unseen live (the real plan is `"pro"`);
+  - the sidebar's collapsed state isn't remembered across reloads;
+  - **the real `timezone` setting is still `UTC`**, so daily buckets are UTC days. Settings has a one-click "Use this browser's zone" (the user is in Asia/Karachi); the user should decide;
+  - `/api/prompts` lists **493** prompts for all time, against 98,948 `turns` (turns counts every `type='user'` record, tool results included). It is the old app's semantics: a prompt needs an assistant row whose `parent_uuid` is the prompt's uuid. Not changed here; worth a look if prompts seem missing;
+  - `/activity` and `/tools` are still placeholders (phase 06).
+- **Exact next step:** commit phase 05 (if the user agrees), then start phase 06 with `phase-06-new-features.md`. Read its new "Notes from phase 05" block and `frontend/README.md` § Page patterns first.
 
 ## Environment facts
 
@@ -69,10 +69,42 @@ Add facts as you learn them. Never record secrets.
   - `next/font/google` (IBM Plex Sans, JetBrains Mono) downloads the fonts **at build time**, so the Docker build needs network access.
   - Dev: `pnpm dev` on :3000. Next reads env from `frontend/.env*`, not the repo root. `BACKEND_URL` defaults to `http://localhost:8000`, so local dev needs no env file.
   - Headless browser checks: the system Chrome (`C:/Program Files/Google/Chrome/Application/chrome.exe`) works with `playwright-core`, installed in the session scratchpad and not added to the project.
+- **Frontend (phase 05):** added `@tanstack/react-table` **8.21.3** (pinned to v8; `latest` is 9.3.1 with a different API). No other new dependencies.
+  - **Only one `next dev` can run per project directory** ("Another next dev server is already running"). To check against a second backend, use `pnpm build` and then `BACKEND_URL=http://localhost:<port> pnpm exec next start --port 3001`. A build doesn't disturb a running dev server.
+  - **Git Bash rewrites `/overview`-style CLI arguments into Windows paths.** Prefix with `MSYS_NO_PATHCONV=1` when you pass routes to a script.
+  - **`uvicorn --reload` on Windows can hang mid-reload** and leave an orphaned `multiprocessing.spawn` worker that keeps the port. Find it by `ParentProcessId` and `taskkill /T /F` it. Prefer restarting without `--reload`.
+  - Old app on a copy of its DB, with nothing to rescan: `PORT=8080 python cli.py dashboard --no-scan --no-open --db <copy> --projects-dir <empty dir>`. Its 30-second scan loop always runs, even with `--no-scan`, so never point it at the real DB for a frozen comparison.
 
 ## Decisions & deviations
 
 Record anything decided during implementation that isn't in README.md's Decisions table, with the date and the reason.
+
+- **2026-11-22 (phase 05): backend additions** (all additive; tests in `test_api.py` / `test_queries.py`):
+  - `GET /api/daily` rows add `sessions`, `turns`, `cost_usd` and `cost_by_model` (`{model: usd}`; unpriced models left out). They're priced per (day, model) by `analytics.daily_model_tokens` + `costs.cost_by_model_per_key`, so the days sum to the overview cost.
+  - `GET /api/overview`, `/api/daily` and `/api/by-model` take `project=<slug>` (an empty value means no filter). The project detail page is built from these.
+  - `GET /api/projects/daily` → `[{project_slug, day, cost_usd}]` (days with no priced activity are absent). This is the spec's "`/api/projects/daily`" option.
+  - `POST /api/tips/restore {key}` deletes the dismissal, for the Tips undo toast.
+- **2026-11-22 (phase 05): TanStack Table v8, not v9.** v9 (the npm `latest`) renamed the core API (`createCoreRowModel`, `TableFeatures` generics). v8.21 is mature and React 19 compatible.
+- **2026-11-22 (phase 05): dark mode has its own data-colour steps.** This changes phase 04's "data colours are the same in both themes": the hues are the same, the steps differ. The dataviz validator failed the light values on the dark lightness band. Darkening the blue alone collapsed it into the violet under deutan, so the blue sits high in the band and the violet low: `#4596f5 / #7350e8 / #c48628 / #36a07a` (mythos unchanged). Every check passes in both modes.
+- **2026-11-22 (phase 05): `usePathname()` only inside `<Suspense>`.** On dynamic routes the pathname is URL data under Cache Components, and the build failed for `/projects/[slug]`. The top bar's title and range slot, and the sidebar's active state, now read it inside their own boundaries.
+- **2026-11-22 (phase 05): Settings timezone.** The server stores `UTC` until set, and can't tell "unset" from "UTC". So Settings shows the stored zone plus a one-click "Use this browser's zone (…)" when they differ, instead of silently assuming the browser's zone. The page is mounted client-only, because it reads `Intl` while rendering.
+- **2026-11-22 (phase 05): the session turn table defaults to "Turns"** (prompts + assistant turns; 313 of 702 rows on the checked session). "All records" shows the tool-result and attachment records too, as the old table always did. It's client-paginated at 100 rows and has a cost column.
+- **2026-11-22 (phase 05): Tips undo** dismisses at once (optimistic) and calls `/api/tips/restore` on Undo. The alternative, a delayed dismissal, would be lost if the tab closed.
+- **2026-11-22 (phase 05): old features intentionally changed** (everything else in `web/routes/*.js` is present):
+  - Overview:
+    - the **sunburst became a donut of families plus a full version list** (share bar, tokens, cost, raw ids on hover). The zoom interaction and the "smaller slices" line are gone; clicking a family filters the list instead;
+    - the **five token KPI cards and the "Total tokens" card became the token composition bar** (tokens and cost per type, 5m/1h in the legend and tooltip, a Tokens/Cost share switch);
+    - the **"Tokens by project" grouped input/output bar chart was dropped**: per-project input/output/cache reads are in the Top projects tooltip and in the Projects table;
+    - the Projects and Turns KPIs became Prompts (turns) and the "N projects" sub-line on Sessions; Cache hit rate is new;
+    - the glossary `<details>` became info tooltips, worded as before;
+    - per-page range tabs became the global range picker (phase 04);
+  - Prompts: the 200-row cap became server pagination. The "title" and "session" columns moved into the detail Sheet ("Open session"), and a project column was added. The "cache cost" column became the full turn cost (phase 03 fix). Sort adds Cost.
+  - Sessions list: the session-id column became a clickable row (the id with a copy button is in the detail header). Project and model filters were added.
+  - Session detail: the separate "Cache create (5m)/(1h)" cards are folded into the token composition. Duration is new; the turns filter is described above.
+  - Projects list: the default sort is cost (was total tokens). A daily-cost sparkline, last active and a name filter were added; all the old columns are kept.
+  - Skills: the page had its own range tabs defaulting to 30d; it now follows the global range (default All). A third KPI (SKILL.md tokens loaded) was added. Null tokens-per-call show "not scanned" with the KNOWN_LIMITATIONS hint.
+  - Settings: the pricing note points at `backend/pricing.json` (auto-reloaded). Timezone, sync status, change password and a privacy-blur demo are new.
+- **2026-11-22 (phase 05): browser checks ran on a throwaway copy of the data.** Creating a temporary login in the real `users` table was refused by the permission classifier. Instead, `claude_lens_test_e2e<hex>` was migrated and filled by a server-side `INSERT … SELECT` from `claude_dashboard` (data tables only, not `users`/`auth_sessions`), with a backend on :8001 bootstrapping its own admin from env. The schema was dropped afterwards. The real `users`, `auth_sessions` and `settings` were never written.
 
 - **2026-11-22 (phase 04): no `dynamic = "force-dynamic"`.** With Cache Components the route segment config is gone. The API proxy and `/login/submit` call `await connection()` first instead, which has the same effect: they run per request and read `BACKEND_URL` at runtime. The build shows both as `ƒ`.
 - **2026-11-22 (phase 04): `/login` sets `instant = false`** and awaits `searchParams` with no Suspense boundary, so it renders per request. Why: under Cache Components the page was otherwise a prerendered shell plus streamed content, and swapping in the streamed content needs JS. The no-JS fallback then lost `?next=` and the error message. The test caught this.
@@ -152,6 +184,57 @@ Add newest entries at the top, using this template:
 - **Gotchas:** …
 - **Notes for the next session:** <concrete, actionable; these override the phase file where they conflict>
 ```
+
+### 2026-11-22: Phase 05, done
+- **Did:**
+  - backend: per-day sessions/turns/cost on `/api/daily`, a `project` filter on overview/daily/by-model, `/api/projects/daily`, `/api/tips/restore`, plus tests;
+  - frontend: the Overview, Prompts (+ detail Sheet), Sessions (+ `/sessions/[id]`), Projects (+ `/projects/[slug]`), Skills, Tips and Settings pages, and the shared table/chart/filter layer they use;
+  - validated the chart palette with the dataviz script and added dark-mode steps;
+  - fixed the shell's `usePathname` reads for dynamic routes;
+  - trimmed `placeholders.tsx` to Activity and Tools;
+  - wrote `frontend/README.md` § Page patterns, added the endpoints to `backend/README.md`, and added notes to the phase 06 file.
+- **Files:**
+  - backend changed: `claude_lens/api/routers/{analytics,projects,tips}.py`, `claude_lens/api/schemas.py`, `claude_lens/core/{costs,tips}.py`, `claude_lens/db/queries/analytics.py`, `tests/test_{api,queries}.py`, `README.md`;
+  - frontend created:
+    - `app/(dashboard)/{sessions/[id],projects/[slug]}/page.tsx`;
+    - `components/{bar-list,data-table,detail-header,filters,info-tip,model-badge,section-card,sparkline,turn-breakdown}.tsx`;
+    - `components/charts/{token-composition,daily-chart,model-mix}.tsx`;
+    - `components/{overview,prompts,sessions,projects,skills,tips,settings}/*`;
+    - `hooks/{use-url-state,use-server-table}.ts`, `lib/{glossary,usage}.ts`;
+  - frontend changed: the 7 route `page.tsx` files, `app/globals.css` (dark data steps), `components/placeholders.tsx`, `components/shell/{app-sidebar,top-bar}.tsx`, `components/ui/chart.tsx` (a `valueFormatter` prop, marked `Claude Lens:`), `lib/{api-types,format,queries}.ts`, `package.json` / `pnpm-lock.yaml` (`@tanstack/react-table` 8.21.3), `README.md`;
+  - docs: this file, the phase 05 file (all boxes ticked, Outcome) and the phase 06 file ("Notes from phase 05").
+- **Verification:**
+  - `pnpm typecheck`, `pnpm lint`: clean (0 warnings). `pnpm build`: 7 core routes `○`, `/sessions/[id]` and `/projects/[slug]` `◐`.
+  - Backend: `uv run pytest tests/test_api.py tests/test_queries.py` → 54 passed; `test_api.py tests/test_tips.py` → 32 passed after the tips/daily additions. Full suite `uv run pytest`: **240 passed** in 731 s (235 + 5 new: daily cost, project filter, projects/daily, daily_model_tokens, cost_by_model_per_key; the tips undo and OpenAPI path checks extend existing tests). Afterwards `pg_namespace` held only `claude_dashboard`.
+  - Old app: `python -m unittest discover tests` → **Ran 85 tests, OK**.
+  - **Old vs new** (old app on a scratchpad copy of its SQLite with an empty projects dir, so no rescans; new API on the e2e copy of `claude_dashboard`):
+    - with no cutoff, the old app was slightly ahead (its last scan, in phase 03, ran a few minutes after the last Postgres sync: turns 98,953 vs 98,948, cost $6,438.9984 vs $6,438.7082, same 1,090 sessions / 85 projects);
+    - **at `until=2026-11-22T11:55:00Z` (before the last sync) all 15 overview fields are identical**: sessions 1,090, projects 85, turns 98,937, input 2,361,204, output 64,229,362, cache_read 11,280,484,719, cache_5m 29,362,694, cache_1h 197,657,259, cost $6,437.9321 (input 10.8757, output 1,229.7341, cache_read 3,535.2405, 5m 122.8509, 1h 1,539.2309, create 1,662.0818);
+    - **all 85 project rows identical** on sessions/turns/tokens/cost. Spot check Flourish Backend API: 225 sessions, 19,238 turns, total 2,387,789,110 tokens, $1,597.1404 on both;
+    - session `011f0861…`: 702 records on both, cost $74.0637, output 243,710, cache_read 93,118,763 on both.
+  - **The UI shows the API's numbers:** Overview (range All) $6,438.71 / 1,090 / 98,948, the plan note "You pay $20/mo on Pro"; project page $1,597.14; session page $74.06 with 702 records.
+  - **Headless Chrome, 25/25 PASS** (`playwright-core` + system Chrome against `next start` on :3001):
+    - the daily Cost mode legend and table view; the model-mix family filter;
+    - Ctrl+B gives `blur(6px)`; a Top-project click keeps `?range=90d`;
+    - the prompt Sheet (full prompt + breakdown); `sort=recent` in the URL; search "commit" narrows 493 → 69;
+    - the sessions Cost header gives `sort=cost&order=desc` with a top row of $74.06; next page gives `page=2`;
+    - Turns/All records 313 → 702; the turn dialog shows tool calls;
+    - tip dismiss is optimistic (3 → 2, API 2), Undo restores it (3, API 3);
+    - the timezone saves from the browser (Asia/Karachi); a wrong current password shows a message with no logout; a password change signs out to /login, and the new password works.
+  - **Console: no hydration warnings or errors** on any page at 1440px or 390px. The only console line is the deliberate wrong-password 400. **No horizontal page overflow at 390px** on any of the 9 pages (wide tables scroll inside their cards). Screenshots in dark and light (Overview) were checked by eye.
+- **Commit:** uncommitted. Suggested: `feat(frontend): redesigned core pages with daily cost, project filters and tips undo`.
+- **Gotchas:**
+  - The `react-hooks/incompatible-library` lint warning on `useReactTable` is suppressed. That's fine **only while the React Compiler is off** (it is; `next.config.ts`). If it's ever enabled, add `"use no memo"` to `DataTable`, or rows go stale.
+  - TanStack only sorts columns that have an accessor. `DataTable` adds a no-op accessor to server-sorted display columns. Without it, the headers silently weren't sortable.
+  - Playwright's `waitForLoadState("networkidle")` returns at once once the page has reached it, so wait for the specific response (`page.waitForResponse`) after a click. Slow queries (ILIKE search, sort by cost) take 1–3 s over the network from this PC.
+  - The Recharts 3 legend sorts items alphabetically by default; pass `itemSorter={null}`.
+  - shadcn's `CardHeader` has its own grid template; overriding `grid-cols-*` on it scrambles the layout (the first Tips cards did this). Use `CardContent` + flex for custom header rows.
+  - Two other servers were running from a different Claude Code session (:3000 dev, :8000 backend without reload, started 16:37). They were left alone; mine ran on :8001/:3001/:8080 and are stopped.
+- **Notes for the next session:**
+  - Reuse `DataTable`, `useServerTable`, `FilterBar`/`SearchBox`/`ProjectSelect`, `SectionCard`, `BarList`, `KpiCard` and `InfoTip`. For new per-day series, extend `/api/daily` or reuse `daily_model_tokens` + `cost_by_model_per_key`.
+  - The Activity calendar's day link must use an **inclusive** `until` (`?since=D&until=D`); see the phase 06 notes.
+  - The deep session view can hang its new charts above the turn table in `components/sessions/session-detail.tsx`. Mind the 100-row pagination and the Turns/All filter when scrolling to a turn.
+  - For browser checks without the admin password, use the throwaway-schema copy approach (see Decisions). The helper used here lived in the session scratchpad and is gone. Recreate it: `Settings.from_env({..., "DB_SCHEMA": "claude_lens_test_e2e<hex>"})`, `migrate(conn, schema)`, then `INSERT INTO <schema>.<t> (<cols>) OVERRIDING SYSTEM VALUE SELECT <cols> FROM claude_dashboard.<t>` for messages, tool_calls, files, session_titles, settings, dismissed_tips, skill_catalog and sync_runs (columns from `information_schema` with `is_generated = 'NEVER'`, which skips `prompt_tsv`). Start the backend with that `DB_SCHEMA` plus `ADMIN_USERNAME`/`ADMIN_PASSWORD`, and `DROP SCHEMA … CASCADE` at the end.
 
 ### 2026-11-22: Phase 04, done
 - **Did:**

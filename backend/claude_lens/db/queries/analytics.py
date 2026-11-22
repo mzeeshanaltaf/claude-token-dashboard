@@ -20,9 +20,19 @@ _TOKEN_SUMS = """
        COALESCE(SUM(m.cache_create_1h_tokens), 0)::bigint  AS cache_create_1h_tokens"""
 
 
-def overview_totals(conn: psycopg.Connection, since: Optional[datetime] = None,
-                    until: Optional[datetime] = None) -> dict:
+def _filters(since: Optional[datetime], until: Optional[datetime],
+             project: Optional[str]) -> tuple[str, dict]:
+    """The range clause plus an optional `m.project_slug` filter (bound, never inlined)."""
     rng, params = range_clause(since, until)
+    if project:
+        rng += " AND m.project_slug = %(project)s"
+        params["project"] = project
+    return rng, params
+
+
+def overview_totals(conn: psycopg.Connection, since: Optional[datetime] = None,
+                    until: Optional[datetime] = None, project: Optional[str] = None) -> dict:
+    rng, params = _filters(since, until, project)
     return fetch_one(conn, f"""
       SELECT COUNT(DISTINCT m.session_id)   AS sessions,
              COUNT(DISTINCT m.project_slug) AS projects,
@@ -34,9 +44,10 @@ def overview_totals(conn: psycopg.Connection, since: Optional[datetime] = None,
 
 
 def model_breakdown(conn: psycopg.Connection, since: Optional[datetime] = None,
-                    until: Optional[datetime] = None) -> list[dict]:
+                    until: Optional[datetime] = None,
+                    project: Optional[str] = None) -> list[dict]:
     """Per-model token totals + assistant turn count. The caller prices them."""
-    rng, params = range_clause(since, until)
+    rng, params = _filters(since, until, project)
     return fetch_all(conn, f"""
       SELECT COALESCE(m.model, 'unknown') AS model,
              COUNT(*) AS turns,
@@ -51,12 +62,15 @@ def model_breakdown(conn: psycopg.Connection, since: Optional[datetime] = None,
 
 
 def daily_token_breakdown(conn: psycopg.Connection, since: Optional[datetime] = None,
-                          until: Optional[datetime] = None, tz: str = "UTC") -> list[dict]:
+                          until: Optional[datetime] = None, tz: str = "UTC",
+                          project: Optional[str] = None) -> list[dict]:
     """One row per local day (in `tz`): stacked-bar data."""
-    rng, params = range_clause(since, until)
+    rng, params = _filters(since, until, project)
     params["tz"] = tz
     return fetch_all(conn, f"""
       SELECT (m.timestamp AT TIME ZONE %(tz)s)::date AS day,
+             COUNT(DISTINCT m.session_id) AS sessions,
+             COUNT(*) FILTER (WHERE m.type = 'user') AS turns,
              COALESCE(SUM(m.input_tokens), 0)::bigint      AS input_tokens,
              COALESCE(SUM(m.output_tokens), 0)::bigint     AS output_tokens,
              COALESCE(SUM(m.cache_read_tokens), 0)::bigint AS cache_read_tokens,
@@ -66,6 +80,28 @@ def daily_token_breakdown(conn: psycopg.Connection, since: Optional[datetime] = 
        WHERE TRUE {rng}
        GROUP BY 1
        ORDER BY 1
+    """, params)
+
+
+def daily_model_tokens(conn: psycopg.Connection, since: Optional[datetime] = None,
+                       until: Optional[datetime] = None, tz: str = "UTC",
+                       project: Optional[str] = None,
+                       by_project: bool = False) -> list[dict]:
+    """Per (local day, model) assistant-token sums, for pricing each day.
+
+    With `by_project`, rows are per (project_slug, day, model) instead: the
+    projects list's daily-cost sparklines. The caller prices them.
+    """
+    rng, params = _filters(since, until, project)
+    params["tz"] = tz
+    proj_col = "m.project_slug, " if by_project else ""
+    return fetch_all(conn, f"""
+      SELECT {proj_col}(m.timestamp AT TIME ZONE %(tz)s)::date AS day,
+             COALESCE(m.model, 'unknown') AS model,
+             {_TOKEN_SUMS}
+        FROM messages m
+       WHERE m.type = 'assistant' {rng}
+       GROUP BY {"1, 2, 3" if by_project else "1, 2"}
     """, params)
 
 
