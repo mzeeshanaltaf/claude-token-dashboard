@@ -20,7 +20,7 @@ Status values: `not-started` · `in-progress` · `blocked` · `done`
 ## Baton (replace this section at the end of every session)
 
 - **Current phase:** 04 is done. Next is 05.
-- **Last commit:** `7de4a9b docs(plan): record phase 03 commit in handoff`. Phase 04 (`frontend/` plus these doc updates) is **uncommitted** until the user approves (the suggested message is in the session log).
+- **Last commit:** `b44dd0a feat(frontend): next.js shell, login, api proxy and date-range plumbing` (phase 04), pushed to `mzeeshanaltaf/main`, plus a docs follow-up that records this hash.
 - **What works:**
   - `frontend/` (Next 16.4.6, React 19.3, shadcn radix-nova, Tailwind v4, TanStack Query). `pnpm lint` and `pnpm build` are clean;
   - the runtime `/api/*` proxy to `BACKEND_URL`, the `proxy.ts` cookie gate, and the login page (fetch path plus a no-JS `/login/submit` fallback);
@@ -186,7 +186,7 @@ Add newest entries at the top, using this template:
     - no-JS context: the error message renders, and sign-in lands on `/sessions?range=7d`.
   - Screenshots of login, overview (dark and light) and the blurred prompts page were checked by eye.
 - **Login used for the checks:** a temporary user `lens-e2e` with a random password, created in the real `users` table through `claude_lens` helpers, because the admin password isn't available to the session. It was **deleted afterwards**, together with its 3 sessions; `users` again holds only `admin`. 6 failed attempts for the nonexistent `nobody-e2e` sit in the in-memory lockout until the backend restarts (harmless).
-- **Commit:** uncommitted. Suggested: `feat(frontend): next.js shell, login, api proxy and date-range plumbing`.
+- **Commit:** `b44dd0a feat(frontend): next.js shell, login, api proxy and date-range plumbing`, pushed to `mzeeshanaltaf/main`.
 - **Gotchas:**
   - The shadcn CLI writes `import { cn } from "cn"`. That's the real `cn` package, not a broken alias (I briefly "fixed" it and then reverted).
   - Cache Components: any client component that calls `useSearchParams` (`useRange`, `useRangedQuery`, the sidebar's range links) needs a `<Suspense>` above it. The dashboard layout wraps `children`, and the top bar wraps the range picker.
