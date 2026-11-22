@@ -57,6 +57,36 @@ run when the schema already has history, unless `--force`. It ends with a parity
 row counts, distinct sessions, the five token sums overall and per model, tool result
 tokens and errors, exact `files` offsets, and the plan. It exits 1 on any mismatch.
 
+## API
+
+```bash
+uv run uvicorn claude_lens.api.main:app --port 8000   # OpenAPI docs at /docs
+uv run claude-lens set-password admin                 # set/reset a password (creates the user if missing)
+```
+
+On startup the API opens a connection pool, applies pending migrations, and — if `users`
+is empty — creates the admin from `ADMIN_USERNAME` / `ADMIN_PASSWORD` (it refuses to start
+when both the users table and those env vars are empty; once a user exists they are
+ignored). For local `http://` use, set `COOKIE_SECURE=false`.
+
+- **Auth:** `POST /api/auth/login {username,password}` sets the `cl_session` cookie
+  (HttpOnly, SameSite=Lax, `Secure` unless `COOKIE_SECURE=false`, 7-day sliding expiry;
+  only its sha256 is stored). `POST /api/auth/logout`, `GET /api/auth/me`,
+  `POST /api/auth/password {current,new}` (revokes every other session). 5 failed logins
+  per (IP, username) within 15 minutes → 429. With `TRUST_PROXY=true` the IP is the last
+  `X-Forwarded-For` hop.
+- **CSRF:** every non-GET request must be `Content-Type: application/json`, and an `Origin`
+  header, if sent, must match `Host` or `X-Forwarded-Host`.
+- **Endpoints** (all need a login except `health` and `auth/login`/`logout`): `overview`,
+  `daily`, `by-model`, `tools`, `skills`, `projects`, `projects/{slug}/sessions`,
+  `sessions`, `sessions/{id}`, `prompts`, `tips`, `POST tips/dismiss`, `GET/POST plan`,
+  `GET/POST settings`, `sync-status`, `health`. Range filters are `since` (inclusive) and
+  `until` (exclusive), ISO 8601; no offset means UTC.
+- **Pagination:** `sessions` and `prompts` take `page`, `page_size` (≤ 200), `sort`, `order`
+  (`asc`/`desc`), `q`, `project`, `model`, and return `{items, total, page, page_size}`.
+- **Pricing** is read from `backend/pricing.json` and reloaded when its mtime changes.
+- **Timezone:** `/api/daily` buckets days in the `timezone` setting (default `UTC`).
+
 ## Database tests
 
 DB tests use `TEST_DATABASE_URL`, falling back to `DATABASE_URL`. Each test session

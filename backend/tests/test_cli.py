@@ -9,7 +9,6 @@ from claude_lens.cli import build_parser, main
 from helpers import q, q1
 
 COMMANDS = ["scan", "migrate-sqlite", "status", "set-password"]
-STUBS = ["set-password"]
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_session.jsonl"
 
 
@@ -22,10 +21,25 @@ def test_help_lists_all_subcommands(capsys):
         assert name in out
 
 
-@pytest.mark.parametrize("name", STUBS)
-def test_stub_subcommands_print_not_implemented(name, capsys):
-    assert main([name]) == 1
-    assert "not implemented" in capsys.readouterr().out
+def test_set_password_needs_a_username():
+    with pytest.raises(SystemExit) as exc:
+        build_parser().parse_args(["set-password"])
+    assert exc.value.code == 2
+
+
+def _answers(monkeypatch, *values):
+    it = iter(values)
+    monkeypatch.setattr(cli, "_getpass", lambda prompt="": next(it))
+
+
+def test_set_password_rejects_mismatch_and_short(monkeypatch, capsys):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://unused")
+    _answers(monkeypatch, "longenough1", "different22")
+    assert main(["set-password", "admin"]) == 1
+    assert "don't match" in capsys.readouterr().err
+    _answers(monkeypatch, "short", "short")
+    assert main(["set-password", "admin"]) == 1
+    assert "at least 8" in capsys.readouterr().err
 
 
 def test_command_is_required():
@@ -174,6 +188,27 @@ def test_status_prints_runs_and_counts(db, cli_env, capsys):
     assert "migrations applied: 001" in out
     assert " ok " in out and "cli-test-pc" in out
     assert "messages" in out and "sessions" in out
+
+
+def test_set_password_creates_then_updates_and_revokes(db, cli_env, monkeypatch, capsys):
+    from claude_lens.core.passwords import verify_password
+
+    _answers(monkeypatch, "first-pass-1", "first-pass-1")
+    assert main(["set-password", "admin"]) == 0
+    assert "created user 'admin'" in capsys.readouterr().out
+    uid, h1 = q(db, "SELECT id, password_hash FROM users WHERE username = 'admin'")[0]
+    assert verify_password("first-pass-1", h1)
+
+    db.execute("INSERT INTO auth_sessions (token_hash, user_id, expires_at)"
+               " VALUES ('t1', %s, now() + interval '1 day'), ('t2', %s, now() + interval '1 day')",
+               (uid, uid))
+    db.commit()
+    _answers(monkeypatch, "second-pass-2", "second-pass-2")
+    assert main(["set-password", "admin"]) == 0
+    assert "2 session(s) revoked" in capsys.readouterr().out
+    h2 = q1(db, "SELECT password_hash FROM users WHERE id = %s", (uid,))
+    assert verify_password("second-pass-2", h2) and not verify_password("first-pass-1", h2)
+    assert q1(db, "SELECT count(*) FROM auth_sessions") == 0
 
 
 def test_status_on_uninitialised_schema(pg_url, monkeypatch, capsys):

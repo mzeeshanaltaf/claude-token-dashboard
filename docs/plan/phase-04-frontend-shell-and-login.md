@@ -36,6 +36,7 @@ node --version && pnpm --version
   - pass the `cookie` request header through, plus every `set-cookie` response header;
   - forward `x-forwarded-for`, `x-forwarded-host` and `origin`;
   - stream the body, which CSV export in phase 06 needs.
+  - *(from phase 03)* forward `content-type` too: the backend's CSRF guard rejects any non-GET request that isn't `Content-Type: application/json` (415), **including `POST /api/auth/logout`** (send `{}`), and any `Origin` whose host doesn't match `Host`/`X-Forwarded-Host` (403). Set `X-Forwarded-Host` to the public host. Run the backend with `TRUST_PROXY=true` behind the proxy so the login lockout keys on the real client IP (the last `X-Forwarded-For` hop).
 - [ ] Auth gate in `middleware.ts` (`proxy.ts` if the installed Next version uses that name):
   - a request without a `cl_session` cookie on any page except `/login` redirects to `/login?next=…`;
   - `/login` with a cookie redirects to `/`.

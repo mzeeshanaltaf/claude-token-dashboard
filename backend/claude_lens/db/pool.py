@@ -51,10 +51,15 @@ def make_pool(
     open: bool = True,
     name: Optional[str] = "claude-lens",
 ) -> ConnectionPool:
-    """Create a connection pool whose connections all use the configured schema."""
+    """Create a connection pool whose connections all use the configured schema.
+
+    Sessions run in UTC, so every `timestamptz` comes back as a UTC datetime
+    (serialised as `...Z`). Local-day bucketing uses `AT TIME ZONE` explicitly.
+    """
     schema = settings.db_schema
 
     def _configure(conn: psycopg.Connection) -> None:
+        conn.execute("SET TIME ZONE 'UTC'")
         set_search_path(conn, schema)
 
     return ConnectionPool(

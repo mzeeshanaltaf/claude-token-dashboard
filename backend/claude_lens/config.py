@@ -123,6 +123,8 @@ class Settings:
     admin_username: Optional[str] = None
     admin_password: Optional[str] = field(default=None, repr=False)
     cookie_secure: bool = True
+    # Read the client IP from X-Forwarded-For (only behind a trusted proxy).
+    trust_proxy: bool = False
     backend_url: str = DEFAULT_BACKEND_URL
     claude_projects_dir: Path = field(default_factory=lambda: Path.home() / ".claude" / "projects")
     machine: str = field(default_factory=socket.gethostname)
@@ -142,6 +144,7 @@ class Settings:
             "admin_username": _get(env, "ADMIN_USERNAME"),
             "admin_password": _get(env, "ADMIN_PASSWORD"),
             "cookie_secure":  _bool(env, "COOKIE_SECURE", True),
+            "trust_proxy":    _bool(env, "TRUST_PROXY", False),
             "backend_url":    _get(env, "BACKEND_URL") or DEFAULT_BACKEND_URL,
         }
         projects = _get(env, "CLAUDE_PROJECTS_DIR")

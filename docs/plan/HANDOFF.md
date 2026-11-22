@@ -9,8 +9,8 @@ The living state of the redesign. Read it at the **start** of every session, aft
 | 00 | Repo hygiene & backend scaffold | done | 2026-11-22 | 2026-11-22 | 71 backend tests pass |
 | 01 | Postgres schema & batched collector | done | 2026-11-22 | 2026-11-22 | 129 backend tests pass (43 on Postgres); SQLite parity exact on a real project |
 | 02 | SQLite migration & daily sync task | done | 2026-11-22 | 2026-11-22 | parity ok (30/30); daily task live, run #2 ok; 145 backend tests |
-| 03 | FastAPI API & auth | not-started | | | |
-| 04 | Frontend shell & login | not-started | | | |
+| 03 | FastAPI API & auth | done | 2026-11-22 | 2026-11-22 | 235 backend tests; overview totals = old app exactly ($6,438.7082) |
+| 04 | Frontend shell & login | in-progress | 2026-11-22 | | |
 | 05 | Frontend core pages | not-started | | | |
 | 06 | New features | not-started | | | |
 | 07 | Deployment, docs & cleanup | not-started | | | |
@@ -19,19 +19,18 @@ Status values: `not-started` · `in-progress` · `blocked` · `done`
 
 ## Baton (replace this section at the end of every session)
 
-- **Current phase:** 02 is done. Next is 03.
-- **Last commit:** `2947df1 feat(collector): sqlite history migration with parity check and daily sync task` (phase 02), pushed to `mzeeshanaltaf/main`, plus a docs follow-up that records this hash.
+- **Current phase:** 03 is done. Next is 04.
+- **Last commit:** `31f9f69 docs(plan): record phase 02 commit in handoff`. Phase 03 is **uncommitted** until the user approves (suggested message in the session log).
 - **What works:**
-  - the **real `claude_dashboard` schema holds the full history.** It was seeded from SQLite (all 30 parity checks matched) and is kept current by the daily task;
-  - `collector/migrate_sqlite.py` and `claude-lens migrate-sqlite [--sqlite PATH] [--machine NAME] [--force] [--check-only] [--chunk N]`;
-  - `claude-lens scan` logs to `~/.claude/claude-lens-sync.log` (rotating, 1 MB, 1 backup);
-  - the scheduled task **`Claude Lens - Daily Sync`** runs daily at 13:00. The old `Claude Token Dashboard - Daily Scan` task and `scripts/daily_scan.py` are gone;
-  - `cd backend && uv run pytest`: **145 tests**, all passing (one transient connection error passed on rerun);
-  - the old app's suite still passes, and the old dashboard still works off its SQLite file (which it updates itself on start).
+  - `uv run uvicorn claude_lens.api.main:app --port 8000` serves every old endpoint from Postgres, plus `auth/*`, `settings`, `sync-status` and `health` (20 paths, all in `/docs`). The full list and shapes are in `backend/README.md` § API and `claude_lens/api/schemas.py`;
+  - login via the `cl_session` cookie, the 7-day sliding expiry, the lockout (5 per (IP, username) per 15 min → 429), the CSRF guard, and `claude-lens set-password <user>`;
+  - the real schema has **one admin user, `admin`**, created by the startup bootstrap on 2026-11-22 (see the session log);
+  - `cd backend && uv run pytest`: **235 tests** (130 on Postgres, 105 offline);
+  - the old app's suite still passes (85), and the old dashboard is untouched.
 - **What doesn't / open issues:**
-  - a run whose final retry also fails can't reach the DB to close its `sync_runs` row. The row stays `running` until a later scan on the same machine marks it `error` (after 6 hours). This is unchanged from phase 01;
-  - migrated `tool_calls` rows have `tool_use_id = NULL` (SQLite never stored it). Only rows ingested by `claude-lens scan` have it.
-- **Exact next step:** start phase 03 with `phase-03-fastapi-api-and-auth.md`.
+  - the `sync_runs` "stays running after the final retry fails" issue (from phase 01) and the `tool_use_id = NULL` on migrated rows (from phase 02) are unchanged;
+  - `core/names.py` walk-up rarely matches on this PC: Claude Code's slug also maps `_` to `-` and lowercases the drive letter (`e--Projects-…-2-Tools-…`), but `_encode_slug` keeps both. Names fall back to the first cwd (see Decisions). This was ported as-is in phase 00. A fix could go in phase 05 if names look wrong.
+- **Exact next step:** start phase 04 with `phase-04-frontend-shell-and-login.md`. Run the backend locally with `ADMIN_USERNAME`/`ADMIN_PASSWORD` unset (the admin exists) and `COOKIE_SECURE=false`.
 
 ## Environment facts
 
@@ -53,11 +52,42 @@ Add facts as you learn them. Never record secrets.
 - Postgres server is **17** (`server_version_num` 170007). From the PC, a round-trip is **~150 ms** and a new connection takes **~1 s**.
 - `TEST_DATABASE_URL` (optional) is used by the backend tests before `DATABASE_URL`. It's listed in `.env.example`.
 - The skill catalog on this PC is **570 slugs**.
+- **API (phase 03):** `uv run uvicorn claude_lens.api.main:app --port 8000` from `backend/`. Env var names: `ADMIN_USERNAME`, `ADMIN_PASSWORD` (only read while `users` is empty), `COOKIE_SECURE` (`false` for local http), `TRUST_PROXY`. The pool is min 1, max 10, and its sessions run in UTC.
+- On this PC an authenticated API request costs ~0.5–1 s (3–6 round-trips at ~150 ms). On the VPS it will be local.
+- FastAPI 0.165 ships an OpenTelemetry hook (`fastapi/telemetry`). It uses no-op providers unless `FASTAPI_OTEL_AUTO_CONFIGURE=true`, so nothing is exported by default. Don't set that variable.
+- `starlette.testclient` warns that `httpx` is deprecated in favour of `httpx2`. Harmless for now.
+- The full backend suite takes **~10 min** over the network. Teardown has been fixed (see Decisions), but check `pg_namespace` for stray `claude_lens_test_%` schemas if a run dies.
 - SQLite `files.path` strings are exactly `str(Path)` of the `rglob` under `~/.claude/projects` (for example `C:\Users\…\.claude\projects\<slug>\<id>.jsonl`), the same as the new collector produces. Checked on 2026-11-22 against the live SQLite: with its offsets seeded, the collector would **skip 1,202** files, **rescan 3** (they changed since the last old-app scan) and find **75 missing**.
 
 ## Decisions & deviations
 
 Record anything decided during implementation that isn't in README.md's Decisions table, with the date and the reason.
+
+- **2026-11-22 (phase 03): JSON shape changes beyond the pagination envelopes** (all additive or type-only):
+  - `GET /api/sessions` and `GET /api/prompts` return `{items, total, page, page_size}`. Their params are `page`, `page_size` (≤ 200, default 50), `sort`, `order` (`asc`/`desc`; each sort has its own default), `q`, `project`, `model` and `since`/`until`. The old `limit` param is gone.
+    - sessions `sort`: `ended` (default), `started`, `turns`, `tokens`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `total_tokens`, `cost`, `title`; `q` matches the title or session id;
+    - prompts `sort`: `tokens` (default), `recent`, `cost`, `cache_read`, `chars`; `q` matches the prompt text. `sort=cost` is computed in SQL from `pricing.json` rates (the same formula as `cost_for`, NULLs last).
+  - `sessions/{id}`: `is_sidechain` is a boolean (was 0/1), and `tool_calls_json` is **parsed JSON** (was a JSON string). An unknown session still returns `[]`.
+  - prompts rows add the assistant turn's `input_tokens`, `output_tokens`, `cache_create_5m_tokens`, `cache_create_1h_tokens` and `cost_*_usd` breakdown. **`estimated_cost_usd` is now the full turn** (the fix).
+  - `projects` rows add `last_active`. `projects/{slug}/sessions` also accepts `since`/`until`.
+  - Timestamps serialise as ISO with `Z` (the API pool runs `SET TIME ZONE 'UTC'`); `daily.day` is `YYYY-MM-DD`.
+- **2026-11-22 (phase 03): session cost follows the range.** In `/api/sessions` and `projects/{slug}/sessions`, `estimated_cost_usd` covers the same in-range messages as the token columns. The old app priced the whole session, even when `since` cut part of it off. With no range the values are identical.
+- **2026-11-22 (phase 03): project names come from sorted cwds.** `project_names()` does one `array_agg(DISTINCT cwd)` query. When no cwd walks up to the slug, the fallback is the first cwd **in sorted order** (SQLite's order was arbitrary), so a project root now comes before its subfolders. On real data this changed 3 of 85 names, to the root folder (`Keyforge` instead of `UUID Generator`, `Zeeshan_Portfolio_v3` instead of `professional-profile-webpage`).
+- **2026-11-22 (phase 03): new endpoints and their shapes.**
+  - `GET /api/settings` → `{plan: string|null, timezone}`: `plan` is null until chosen, for phase 04's first-run picker. `GET /api/plan` still defaults to `"api"`.
+  - `POST /api/settings` takes any subset of `{plan, timezone}`. The timezone is validated against `pg_timezone_names`, and plans against `pricing.json` → `plans` (422 otherwise; `POST /api/plan` validates too, where the old app accepted anything).
+  - `GET /api/sync-status` → `{last_synced_at, machines: [{machine, last_run, last_ok_at}], runs: [last 20]}`.
+  - `GET /api/health` → `{status, version}`.
+- **2026-11-22 (phase 03): auth details.**
+  - `POST /api/auth/logout` needs **no** login: it's idempotent and always 200.
+  - A wrong `current` in `POST /api/auth/password` returns **400** (not 401, so the frontend doesn't bounce to the login page) and counts toward the lockout. The new password needs ≥ 8 characters (422), and so does `ADMIN_PASSWORD` at bootstrap.
+  - Login responds `{username, expires_at}`, and so does `/auth/me`. The lockout 429 carries `Retry-After`. Success resets the counter. An unknown username still runs an argon2 verify (constant time).
+  - The CSRF guard is ASGI middleware: 415 for a non-JSON `Content-Type`, 403 for a mismatched or `null` `Origin`. It applies to every non-GET request, **including login and logout**.
+  - With `TRUST_PROXY=true` the client IP is the **last** `X-Forwarded-For` hop (the one our proxy appended). New env var `TRUST_PROXY` (default false) is in `Settings` and `.env.example`.
+  - `claude-lens set-password <user>` **creates** the user if missing, and revokes all of that user's sessions.
+- **2026-11-22 (phase 03): naive `since`/`until` mean UTC.** A value without an offset (e.g. `2026-11-01`) is UTC midnight. Phase 04 should send offset-qualified ISO strings (`Date.toISOString()`) built from the user's local day boundaries.
+- **2026-11-22 (phase 03): the tips' dismissed check is one query** (`dismissed_keys`, `dismissed_at > now() - interval '14 days'`) instead of one query per tip.
+- **2026-11-22 (phase 03): the test DB URL is redacted.** `pg_url` is a `str` subclass whose repr is `<DATABASE_URL redacted>`, because pytest printed the full URL (with password) in a fixture traceback. `pg_schema` now drops its schema over a **fresh** connection; the one held for the whole run had been closed by the server, which left schemas behind.
 
 - **2026-11-22 (phase 00): `tool_use_id` is set on `_tool_result` rows too.** On those rows it's the block's `tool_use_id`, the same value already stored in `target`. Why: every tool dict now has identical keys, which keeps phase 01's COPY staging uniform. Phase 06 can also join a `tool_use` to its result with `u.tool_use_id = r.tool_use_id`. `target` is unchanged, so it still matches migrated SQLite rows.
 - **2026-11-22 (phase 00): `format_for_user` was ported to `core/pricing.py`** along with `load_pricing`, `_tier_from_name` and `cost_for`. It's pure and has tests. Only `get_plan`/`set_plan` were left out.
@@ -98,6 +128,44 @@ Add newest entries at the top, using this template:
 - **Gotchas:** …
 - **Notes for the next session:** <concrete, actionable; these override the phase file where they conflict>
 ```
+
+### 2026-11-22: Phase 03, done
+- **Did:**
+  - ported every `db.py` query to `db/queries/*.py` (named `%(x)s` params, `COUNT(*) FILTER`, `::bigint` sums, `AT TIME ZONE` day buckets). The N+1 cwd lookups became one `array_agg(DISTINCT cwd)` query;
+  - server-side pagination, sort whitelists and filters for sessions and prompts; `sort=cost` runs in SQL via a `jsonb_to_recordset` rates CTE;
+  - `core/costs.py` (the `_cost_by_key` / `_cost_breakdown_by_key` / overview rollup, plus per-turn cost) and `core/tips.py` (4 rule sets on Postgres);
+  - **the prompt cost fix** (full assistant turn);
+  - plan and timezone settings, and `sync-status`;
+  - the FastAPI app: lifespan with pool + migrate + admin bootstrap, routers under `/api`, Pydantic response models;
+  - auth: argon2 via pwdlib, sha256-only tokens, the sliding cookie, lockout and CSRF middleware;
+  - `claude-lens set-password`, and the pricing mtime loader.
+- **Files:**
+  - created: `backend/claude_lens/api/{__init__,main,auth,deps,schemas,security}.py`, `backend/claude_lens/api/routers/{__init__,analytics,projects,sessions,prompts,tips,settings}.py`, `backend/claude_lens/core/{costs,tips,passwords}.py`, `backend/claude_lens/db/queries/{__init__,common,analytics,projects,sessions,prompts,settings,sync,auth}.py`, `backend/tests/test_{queries,tips,end_to_end_totals,api,auth,api_units}.py`;
+  - changed: `backend/claude_lens/{cli,config}.py`, `backend/claude_lens/core/pricing.py` (`make_pricing_loader`), `backend/claude_lens/db/pool.py` (UTC sessions), `backend/tests/{conftest,helpers,test_cli}.py`, `backend/README.md` (§ API), `.env.example` (`TRUST_PROXY`), this file, and the phase 03 and 04 files.
+- **Verification:**
+  - `cd backend && uv run pytest`: **235 passed, 1 error** in 592 s. The error was the session teardown's `DROP SCHEMA` on a server-closed idle connection, not a test. Fixed in `conftest.py`. **Full rerun: 235 passed, 0 errors in 585 s**, and no `claude_lens_test_%` schemas were left behind. `-m "not db"`: **105 passed** in 0.6 s; 130 DB tests. New files: queries 31, tips 11, end-to-end 1, api 21, auth 18, api_units 15; cli +2.
+  - `python -m unittest discover tests` (old app): **Ran 85 tests, OK**.
+  - **Live exit check** (real schema, `uvicorn … --port 8000`, after `claude-lens scan`):
+    - `curl -i /api/overview` → **401**; `curl -c jar` login → 200 `{"username":"admin",…}`; `curl -b jar /api/overview` → **200**;
+    - logout → `{"ok":true}`, then 401 with the old cookie;
+    - `/docs` → 200, with **20 paths** in `openapi.json`.
+  - **Totals vs the old app** (`python cli.py dashboard` on 8080, `range=all`, both freshly scanned): **all 15 fields identical**. cost_usd **6438.7082** = 6438.7082; sessions 1,090; projects 85; turns 98,948; input 2,361,224; output 64,235,228; cache_read 11,283,008,440; cache_5m 29,362,694; cache_1h 197,676,508; cache-create cost 1662.2358.
+  - **Other endpoints, old vs new:** by-model (14), daily (210), tools (48), skills (55 rows, `tokens_per_call` equal), tips (3), plan + pricing, one session's 2,557 turns, and 200 sessions/prompts rows are all identical. The exceptions: this live session (scanned a few seconds apart), prompts' `estimated_cost_usd` (the fix), and `project_name` for 3 projects / 33 sessions (sorted-cwd fallback, see Decisions).
+- **Admin seeding (local):** the first API start set `ADMIN_USERNAME=admin` and `ADMIN_PASSWORD` as process env vars only (`.env.local` was not changed). The generated password was given to the user privately (it was kept in the session scratchpad); they should replace it with `uv run claude-lens set-password admin`. The real `users` table holds `admin`; `auth_sessions` is empty.
+- **Commit:** uncommitted. Suggested: `feat(api): fastapi endpoints, pagination and single-admin auth on postgres`.
+- **Gotchas:**
+  - **pytest prints fixture values in tracebacks**: a teardown error dumped the full `DATABASE_URL` into the test output. Fixed by redacting `pg_url`'s repr. Never paste raw pytest failure output into docs.
+  - Two stray test schemas (`claude_lens_test_74e57b2c`, `…_6d95f6f5`) were found and dropped. Only `claude_dashboard` remains.
+  - psycopg sends Python `str` as an *unknown*-typed parameter, so ISO strings insert fine into `timestamptz` (handy in tests). Without params, `%` in SQL is literal; with params it must be `%%`. The queries avoid `LIKE` literals (they use `strpos`) to sidestep this.
+  - FastAPI yield dependencies: endpoints that write call `conn.commit()` themselves before returning, so the change is durable before the response is sent.
+  - Git Bash rewrites `/docs` inside a `curl -w` format string into a Windows path; it's cosmetic.
+- **Notes for the next session:**
+  - Generate TS types from `http://localhost:8000/openapi.json`. Paginated responses are `SessionPage` / `PromptPage`.
+  - The proxy must forward `content-type`, `origin`, `x-forwarded-host` and `x-forwarded-for`, and cookies both ways. Logout must POST JSON (`{}`). See the note added to the phase 04 file.
+  - First-run plan picker: show it when `GET /api/settings` returns `plan: null`. Save with `POST /api/settings {plan}`.
+  - Synced badge: `GET /api/sync-status` → `last_synced_at` plus `machines[].last_run.status` (`ok`/`error`/`running`) and `.machine`.
+  - Send `since`/`until` with explicit offsets. `/api/daily` buckets by the `timezone` setting (default UTC); phase 05's Settings can set it.
+  - A 401 means "not logged in". A wrong current password on change-password is 400; lockout is 429 with `Retry-After`.
 
 ### 2026-11-22: Phase 02, done
 - **Did:**

@@ -23,22 +23,22 @@ uv run claude-lens status
 ## Tasks
 
 ### Queries (`db/queries/*.py`)
-- [ ] Port every `db.py` query function. Each takes a connection or pool, keeps its current parameters, and returns dicts. Dialect changes:
+- [x] Port every `db.py` query function. Each takes a connection or pool, keeps its current parameters, and returns dicts. Dialect changes:
   - `?` becomes `%s`;
   - `INSERT OR REPLACE` becomes `ON CONFLICT … DO UPDATE`;
   - `SUM(CASE WHEN …)` becomes `COUNT(*) FILTER (WHERE …)`;
   - `substr(timestamp,1,10)` becomes `(timestamp AT TIME ZONE %(tz)s)::date`. The timezone comes from `settings.timezone` and defaults to `UTC`.
-- [ ] Replace the N+1 cwd lookups in `project_summary`, `recent_sessions` and `project_sessions` with one query: `SELECT project_slug, array_agg(DISTINCT cwd) … GROUP BY project_slug`. Then call `core.names.best_project_name`.
-- [ ] `sessions` and `prompts` get server-side `page`, `page_size` (max 200), `sort` (from a whitelist of columns), `q` (ILIKE on the title or prompt), `project` and `model`. They return `{items, total, page, page_size}`.
-- [ ] **Fix:** the prompt cost is the full assistant-turn cost (all 5 token types), not cache reads only.
-- [ ] `core/tips.py`: port the 4 rule sets to Postgres. `_is_dismissed` uses `dismissed_at > now() - interval '14 days'`.
-- [ ] Plan get/set via the `settings` table. Also add `timezone` get/set.
+- [x] Replace the N+1 cwd lookups in `project_summary`, `recent_sessions` and `project_sessions` with one query: `SELECT project_slug, array_agg(DISTINCT cwd) … GROUP BY project_slug`. Then call `core.names.best_project_name`.
+- [x] `sessions` and `prompts` get server-side `page`, `page_size` (max 200), `sort` (from a whitelist of columns), `q` (ILIKE on the title or prompt), `project` and `model`. They return `{items, total, page, page_size}`.
+- [x] **Fix:** the prompt cost is the full assistant-turn cost (all 5 token types), not cache reads only.
+- [x] `core/tips.py`: port the 4 rule sets to Postgres. `_is_dismissed` uses `dismissed_at > now() - interval '14 days'`.
+- [x] Plan get/set via the `settings` table. Also add `timezone` get/set.
 
 ### API (`api/`)
-- [ ] `api/main.py`:
+- [x] `api/main.py`:
   - on startup, create the pool, run `migrate`, and bootstrap the admin if `users` is empty (from `ADMIN_USERNAME`/`ADMIN_PASSWORD`; refuse to start if both are missing and there are no users);
   - mount routers under `/api`; add `GET /api/health`, which needs no auth.
-- [ ] Routers keep their current JSON shapes. Reuse the `_cost_by_key` and `_cost_breakdown_by_key` logic in a `core/costs.py`. The routes:
+- [x] Routers keep their current JSON shapes. Reuse the `_cost_by_key` and `_cost_breakdown_by_key` logic in a `core/costs.py`. The routes:
   - `overview`, `daily`, `by-model`, `tools`, `skills`;
   - `projects`, `projects/{slug}/sessions`;
   - `sessions`, `sessions/{id}`;
@@ -46,23 +46,23 @@ uv run claude-lens status
   - `tips`, `POST tips/dismiss`;
   - `GET/POST plan`, `GET/POST settings`;
   - `sync-status`: the last run per machine plus its status.
-- [ ] `skills`: `tokens_per_call` comes from the `skill_catalog` table, not the filesystem.
-- [ ] Pricing comes from `backend/pricing.json`, reloaded when its mtime changes (port `_make_pricing_loader`).
-- [ ] Pydantic response models for the main endpoints, so OpenAPI documents them; phase 04 generates TS types from them.
+- [x] `skills`: `tokens_per_call` comes from the `skill_catalog` table, not the filesystem.
+- [x] Pricing comes from `backend/pricing.json`, reloaded when its mtime changes (port `_make_pricing_loader`).
+- [x] Pydantic response models for the main endpoints, so OpenAPI documents them; phase 04 generates TS types from them.
 
 ### Auth (`api/auth.py`, `api/deps.py`)
-- [ ] `POST /api/auth/login {username,password}`:
+- [x] `POST /api/auth/login {username,password}`:
   - argon2 verify via `pwdlib`;
   - on success, create 32 random bytes as the token, store `sha256(token)` in `auth_sessions` with a 7-day expiry, and set the cookie `cl_session` (HttpOnly, SameSite=Lax, `Secure` when `COOKIE_SECURE=true`, Path=/).
-- [ ] `POST /api/auth/logout`, `GET /api/auth/me`, and `POST /api/auth/password {current,new}`. A password change revokes every other session.
-- [ ] `current_user` dependency on every router except `health` and `auth/login`. It slides the expiry forward when less than half the lifetime is left.
-- [ ] Lockout: 5 failures per (IP, username) within 15 minutes returns 429 (in-memory store; there's only one container). Use `X-Forwarded-For` only when it comes from a trusted proxy (`TRUST_PROXY=true`).
-- [ ] CSRF: for non-GET requests, require `Content-Type: application/json`, and an `Origin` header (if present) whose host matches `Host`/`X-Forwarded-Host`.
-- [ ] CLI `claude-lens set-password <username>`, which prompts via `getpass`.
+- [x] `POST /api/auth/logout`, `GET /api/auth/me`, and `POST /api/auth/password {current,new}`. A password change revokes every other session.
+- [x] `current_user` dependency on every router except `health` and `auth/login`. It slides the expiry forward when less than half the lifetime is left.
+- [x] Lockout: 5 failures per (IP, username) within 15 minutes returns 429 (in-memory store; there's only one container). Use `X-Forwarded-For` only when it comes from a trusted proxy (`TRUST_PROXY=true`).
+- [x] CSRF: for non-GET requests, require `Content-Type: application/json`, and an `Origin` header (if present) whose host matches `Host`/`X-Forwarded-Host`.
+- [x] CLI `claude-lens set-password <username>`, which prompts via `getpass`.
 
 ### Tests
-- [ ] Port `test_queries`, `test_server` (now FastAPI `TestClient`), `test_tips` and `test_end_to_end_totals` onto the throwaway-schema fixture.
-- [ ] Auth tests:
+- [x] Port `test_queries`, `test_server` (now FastAPI `TestClient`), `test_tips` and `test_end_to_end_totals` onto the throwaway-schema fixture.
+- [x] Auth tests:
   - 401 without a cookie; login and access works;
   - a wrong password returns 401; the 6th attempt returns 429;
   - logout revokes the session; a password change revokes the other sessions.
@@ -80,3 +80,11 @@ uv run claude-lens status
 
 - The final endpoint list and any shape changes (there should be none except pagination envelopes, which phase 05 must know about).
 - How the admin was seeded locally (env var names only).
+
+## Outcome
+
+Done 2026-11-22.
+- `uv run pytest`: **235 passed**.
+- Live against the real schema: `/api/overview` returns 401 without a cookie and 200 after `curl -c jar` login. Its totals match the old app's `range=all` on all 15 fields (cost **$6,438.7082** on both). `/docs` lists 20 paths.
+- Shape changes beyond the pagination envelopes are listed in HANDOFF.md § Decisions. They are additive or type-only: parsed `tool_calls_json`, boolean `is_sidechain`, extra cost and token fields, and `last_active`.
+- The admin was seeded from `ADMIN_USERNAME`/`ADMIN_PASSWORD` set as process env vars.

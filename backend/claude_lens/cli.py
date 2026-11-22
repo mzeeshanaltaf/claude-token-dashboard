@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import logging
 import sys
 import time
@@ -28,11 +29,6 @@ DEFAULT_SQLITE = Path.home() / ".claude" / "token-dashboard.db"
 _sleep = time.sleep  # patched in tests
 
 log = logging.getLogger("claude_lens.sync")
-
-
-def _not_implemented(args: argparse.Namespace) -> int:
-    print(f"claude-lens {args.command}: not implemented")
-    return 1
 
 
 # --------------------------------------------------------------------------
@@ -309,6 +305,65 @@ def _cmd_status(args: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------
+# set-password
+# --------------------------------------------------------------------------
+
+_getpass = getpass.getpass  # patched in tests
+
+
+def _cmd_set_password(args: argparse.Namespace) -> int:
+    """Set (or create) a user's password and revoke all of their sessions."""
+    from .core.passwords import check_new_password, hash_password
+    from .db.queries import auth as auth_q
+
+    settings = load_settings()
+    if not settings.database_url:
+        print("DATABASE_URL is not set (put it in .env.local at the repo root)", file=sys.stderr)
+        return 2
+    username = args.username.strip()
+    if not username:
+        print("username must not be empty", file=sys.stderr)
+        return 2
+    try:
+        password = _getpass(f"New password for {username}: ")
+        again = _getpass("Repeat it: ")
+    except (EOFError, KeyboardInterrupt):
+        print("\naborted", file=sys.stderr)
+        return 1
+    if password != again:
+        print("passwords don't match", file=sys.stderr)
+        return 1
+    try:
+        check_new_password(password)
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    try:
+        conn = connect(settings)
+    except psycopg.OperationalError as e:
+        print(f"cannot connect: {str(e).strip()}", file=sys.stderr)
+        return 1
+    try:
+        migrate(conn, settings.db_schema)
+        user = auth_q.get_user(conn, username)
+        pw_hash = hash_password(password)
+        if user is None:
+            auth_q.create_user(conn, username, pw_hash)
+            revoked = 0
+            action = "created user"
+        else:
+            auth_q.set_password_hash(conn, user["id"], pw_hash)
+            revoked = auth_q.delete_user_sessions(conn, user["id"])
+            action = "password updated for"
+        conn.commit()
+    finally:
+        conn.close()
+    print(f"{action} {username!r} (schema {settings.db_schema}); "
+          f"{revoked} session(s) revoked")
+    return 0
+
+
+# --------------------------------------------------------------------------
 # parser
 # --------------------------------------------------------------------------
 
@@ -350,12 +405,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help=f"rows per COPY chunk (default {sqlite_migration.CHUNK_ROWS})")
     p.set_defaults(func=_cmd_migrate_sqlite)
 
-    stubs = {
-        "set-password": "Reset the admin password.",
-    }
-    for name, help_text in stubs.items():
-        p = sub.add_parser(name, help=help_text, description=help_text)
-        p.set_defaults(func=_not_implemented)
+    p = sub.add_parser(
+        "set-password", help="Set a user's password (creates the user if missing).",
+        description="Prompt for a new password (twice), store its argon2 hash, and revoke"
+                    " every login session of that user. Creates the user if it doesn't exist.")
+    p.add_argument("username")
+    p.set_defaults(func=_cmd_set_password)
     return parser
 
 
