@@ -36,6 +36,14 @@ def _restore_environ():
     os.environ.update(saved)
 
 
+@pytest.fixture(autouse=True)
+def _sync_log(tmp_path, monkeypatch):
+    """Keep `claude-lens scan` from writing to the real ~/.claude/claude-lens-sync.log."""
+    path = tmp_path / "logs" / "claude-lens-sync.log"
+    monkeypatch.setenv("CLAUDE_LENS_SYNC_LOG", str(path))
+    return path
+
+
 @pytest.fixture
 def load_fixture():
     def _load(name: str) -> dict:

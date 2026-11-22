@@ -8,7 +8,7 @@ The living state of the redesign. Read it at the **start** of every session, aft
 |---|---|---|---|---|---|
 | 00 | Repo hygiene & backend scaffold | done | 2026-11-22 | 2026-11-22 | 71 backend tests pass |
 | 01 | Postgres schema & batched collector | done | 2026-11-22 | 2026-11-22 | 129 backend tests pass (43 on Postgres); SQLite parity exact on a real project |
-| 02 | SQLite migration & daily sync task | not-started | | | |
+| 02 | SQLite migration & daily sync task | done | 2026-11-22 | 2026-11-22 | parity ok (30/30); daily task live, run #2 ok; 145 backend tests |
 | 03 | FastAPI API & auth | not-started | | | |
 | 04 | Frontend shell & login | not-started | | | |
 | 05 | Frontend core pages | not-started | | | |
@@ -19,19 +19,19 @@ Status values: `not-started` · `in-progress` · `blocked` · `done`
 
 ## Baton (replace this section at the end of every session)
 
-- **Current phase:** 01 is done. Next is 02.
-- **Last commit:** `3530e74 feat(collector): postgres schema, migrations and batched ingest` (phase 01), pushed to `mzeeshanaltaf/main`, plus a docs follow-up that records this hash.
+- **Current phase:** 02 is done. Next is 03.
+- **Last commit:** `143eed8 docs(plan): record phase 01 commit in handoff`. Phase 02's work is **uncommitted** until the user approves the suggested commit (see the session log).
 - **What works:**
-  - `db/pool.py` (`connect()`, `make_pool()`, `set_search_path()`), `db/migrate.py` (`migrate(conn, schema)`, `applied_versions()`), and `db/migrations/001_init.sql` (all 10 tables plus `schema_migrations`);
-  - `collector/ingest.py`: `scan(root, conn, machine, full=False, *, batch_lines=5000, progress=None)`;
-  - `collector/skills_catalog.py`: `upload_catalog(conn, machine, catalog=None)`;
-  - CLI `claude-lens scan [--full] [--projects-dir] [--batch-lines]` and `claude-lens status` (`migrate-sqlite` and `set-password` are still stubs);
-  - `cd backend && uv run pytest`: **129 passed** (43 DB tests on a throwaway schema). `uv run pytest -m "not db"`: 86 pass offline in under a second;
-  - the old app's 85-test suite still passes.
+  - the **real `claude_dashboard` schema holds the full history.** It was seeded from SQLite (all 30 parity checks matched) and is kept current by the daily task;
+  - `collector/migrate_sqlite.py` and `claude-lens migrate-sqlite [--sqlite PATH] [--machine NAME] [--force] [--check-only] [--chunk N]`;
+  - `claude-lens scan` logs to `~/.claude/claude-lens-sync.log` (rotating, 1 MB, 1 backup);
+  - the scheduled task **`Claude Lens - Daily Sync`** runs daily at 13:00. The old `Claude Token Dashboard - Daily Scan` task and `scripts/daily_scan.py` are gone;
+  - `cd backend && uv run pytest`: **145 tests**, all passing (one transient connection error passed on rerun);
+  - the old app's suite still passes, and the old dashboard still works off its SQLite file (which it updates itself on start).
 - **What doesn't / open issues:**
-  - the real `claude_dashboard` schema **does not exist yet**. That's intentional: phase 02 creates it, then seeds it from SQLite before any real scan;
-  - a run whose final retry also fails can't reach the DB to close its `sync_runs` row. The row stays `running` until a later scan on the same machine marks it `error` (after 6 hours).
-- **Exact next step:** start phase 02 with `phase-02-sqlite-migration-and-daily-sync.md`.
+  - a run whose final retry also fails can't reach the DB to close its `sync_runs` row. The row stays `running` until a later scan on the same machine marks it `error` (after 6 hours). This is unchanged from phase 01;
+  - migrated `tool_calls` rows have `tool_use_id = NULL` (SQLite never stored it). Only rows ingested by `claude-lens scan` have it.
+- **Exact next step:** start phase 03 with `phase-03-fastapi-api-and-auth.md`.
 
 ## Environment facts
 
@@ -40,7 +40,10 @@ Add facts as you learn them. Never record secrets.
 - `DATABASE_URL` is in `.env.local` at the repo root. The target schema is `claude_dashboard`.
 - Python 3.12.7, uv 0.8.3, Node 24.12, pnpm 10.5 on the Windows PC.
 - Old SQLite: `~/.claude/token-dashboard.db`. Transcripts: `~/.claude/projects`.
-- The old scheduled task is named `Claude Token Dashboard - Daily Scan`.
+- ~~The old scheduled task is named `Claude Token Dashboard - Daily Scan`.~~ It was removed in phase 02. The task is now **`Claude Lens - Daily Sync`**: daily at 13:00, running `backend\.venv\Scripts\pythonw.exe -m claude_lens.cli scan` in the repo root. Its log is `~/.claude/claude-lens-sync.log`; override the path with `CLAUDE_LENS_SYNC_LOG`.
+- The real `claude_dashboard` schema was created on 2026-11-22 (migration 001) and seeded from SQLite with `machine = 'Zeeshan-Desktop'`. `settings` holds `plan` as the jsonb string `"pro"`.
+- Migration timing over the network: 54.5 s in total (messages 28.9 s, tool_calls 10.6 s, the other tables under 1 s each).
+- SQLite sha256 before and after phase 02: `4aa2a4c3…ee6a`, mtime 2026-11-21 13:00:02, 268,472,320 bytes. Unchanged.
 - **`python3` doesn't work on this PC** (it's a Windows Store alias stub). Use `python` (3.12.7) for the old suite: `python -m unittest discover tests`. The old suite has **85** tests, not 68.
 - Backend deps resolved by uv on 2026-11-22 (in `backend/uv.lock`):
   - runtime: fastapi 0.165.0, psycopg[binary] 3.3.9, psycopg-pool 3.3.3, pwdlib[argon2] 0.4.2, pydantic 2.14.4 (pydantic-core 2.50.5), uvicorn[standard] 0.54.0, starlette 1.10.0;
@@ -69,6 +72,17 @@ Record anything decided during implementation that isn't in README.md's Decision
   - `prompt_tsv` indexes only the first 100,000 characters of `prompt_text`, because a tsvector over 1 MB makes the insert fail. `prompt_text` itself is stored in full.
   - `tool_calls.is_error` stays `INTEGER` 0/1 (the spec says "same columns"). Only `messages.is_sidechain` became `BOOLEAN`.
 - **2026-11-22 (phase 01): retry semantics.** `scan` retries `psycopg.OperationalError` **3 times** after the first attempt (4 attempts in all), 60 seconds apart. Each attempt gets its own `sync_runs` row, and a failed attempt's row is closed as `error` ("connection lost: …") by the next one. `running` rows older than 6 hours on the same machine are closed as "interrupted". Any other exception closes the row as `error` with `Type: message`, with no retry.
+- **2026-11-22 (phase 02): `migrate-sqlite` guard is stricter than the spec.** It refuses if **any** of `messages`, `tool_calls`, `session_titles`, `files` or `dismissed_tips` has rows, not just `messages`. Why: a stray `files` row would otherwise make the COPY fail on its primary key halfway through. `--force` truncates `messages, tool_calls, session_titles, files, settings, dismissed_tips` with `RESTART IDENTITY`; `sync_runs`, `skill_catalog`, `users` and `auth_sessions` are kept.
+- **2026-11-22 (phase 02): migration extras.**
+  - `--sqlite` defaults to `~/.claude/token-dashboard.db`;
+  - `--check-only` re-runs the parity check without copying, and `--chunk` sets the chunk size;
+  - all SQLite reads happen inside one read transaction, so the copy and the parity check see the same snapshot. The old DB is in `delete` (rollback-journal) mode, so the old scanner simply waits;
+  - COPY writes straight into the real tables (they're empty, so no staging is needed). Text columns go through `ingest._clean_text`/`_clean_json` as a precaution, although the real data had no NULs or lone surrogates.
+- **2026-11-22 (phase 02): parity covers more than the spec.**
+  - Beyond the spec's list, it also checks `dismissed_tips`, `sum(result_tokens)`, the tool error count, exact `files (path, mtime, bytes_read)` equality and the plan. Per-model rows compare the row count plus all 5 sums.
+  - On the Postgres side, `messages` and `files` are filtered by `machine`, while `tool_calls`, titles and tips are compared as totals. So `--check-only` only matches **right after** a migration; any later scan adds rows.
+- **2026-11-22 (phase 02): logging lives in `cli.py`** (the `claude_lens.sync` logger), with no separate `daily.py`. Info goes to stdout and warnings/errors to stderr; each console handler is added only when its stream isn't None (pythonw). The rotating file handler is always added, unless the file can't be opened. Unexpected exceptions and config errors are logged with tracebacks. A new `Settings.sync_log` reads `CLAUDE_LENS_SYNC_LOG`, and a conftest autouse fixture points it at `tmp_path`, so tests never write to the real log.
+- **2026-11-22 (phase 02): the installer warns** (it doesn't fail) when `.env.local` is missing, and fails when `backend\.venv\Scripts\pythonw.exe` is missing. The root README's "Daily background scan" section was rewritten for the new task. The user approved deleting `scripts/daily_scan.py`.
 - **2026-11-22 (phase 01): test fixture shape.** There's one throwaway schema per pytest **session**, truncated before each test, instead of one schema per test, because each migrate+connect costs about 2 s over the network. DB tests are auto-marked `db`.
 
 ## Session log
@@ -84,6 +98,45 @@ Add newest entries at the top, using this template:
 - **Gotchas:** …
 - **Notes for the next session:** <concrete, actionable; these override the phase file where they conflict>
 ```
+
+### 2026-11-22: Phase 02, done
+- **Did:**
+  - wrote `collector/migrate_sqlite.py` and the `claude-lens migrate-sqlite` command: read-only SQLite, one snapshot, chunked COPY, commit per table, ANALYZE, and a built-in parity table;
+  - ran the migration and the first incremental scan against the real `claude_dashboard` schema;
+  - added rotating-file logging to the `scan` path;
+  - rewrote `scripts/install_daily_scan.ps1` for `Claude Lens - Daily Sync`, which also removes the old task;
+  - deleted `scripts/daily_scan.py` (the user approved);
+  - installed the task and triggered it.
+- **Files:**
+  - created: `backend/claude_lens/collector/migrate_sqlite.py`, `backend/tests/test_migrate_sqlite.py`;
+  - changed: `backend/claude_lens/cli.py` (`migrate-sqlite`, the sync log), `backend/claude_lens/config.py` (`sync_log` / `default_sync_log`, `CLAUDE_LENS_SYNC_LOG`), `backend/tests/{conftest,test_cli}.py`, `backend/README.md`, `README.md` (daily sync section), `.env.example`, `scripts/install_daily_scan.ps1`, this file and the phase 02 file;
+  - deleted: `scripts/daily_scan.py`.
+- **Verification:**
+  - `cd backend && uv run pytest`: **144 passed, 1 error** in 320 s. The error was a transient `OperationalError` in the `db` fixture setup for `test_skills_upload.py::test_upload_defaults_to_scanning_disk`; a rerun of that file gave 3 passed. That makes 145 tests, all green. The new files: `test_migrate_sqlite.py` 13, `test_cli.py` +5.
+  - `python -m unittest discover tests` (old app): **Ran 85 tests, OK**.
+  - **Migration** (`uv run claude-lens migrate-sqlite`, 54.5 s): 235,402 messages (28.9 s), 159,328 tool_calls (10.6 s), 1,280 files, 1,002 session_titles, 7 dismissed_tips, plan `pro`. **Parity ok: 30 checks match.** The checks:
+    - row counts, and 1,085 distinct sessions;
+    - token sums: input 2,360,848, output 63,882,836, cache_read 11,257,043,507, cache_5m 29,362,694, cache_1h 196,911,825;
+    - result_tokens 45,489,804, 1,928 tool errors;
+    - 15 per-model rows (including `(none)` and `<synthetic>`);
+    - exact `files` offsets, and the plan.
+
+    These are the same as the 2026-11-20 planning numbers; the old scanner hadn't run since.
+  - **First scan afterwards** (manual, 7.4 s): `scanned 7 files: 684 messages, 407 tool calls, 75 titles in 1 batches; 570 skills in catalog`. That's 7 of the 1,284 files on record.
+  - **Scheduled task:** `Start-ScheduledTask` gave LastTaskResult **0**. The log shows `scanned 1 files: 13 messages, 6 tool calls, 1 titles …`, and `claude-lens status` lists it as `#2 … ok 4.2s Zeeshan-Desktop files=1 messages=13`. Next run: 2026-11-23 13:00.
+  - `Get-ScheduledTask` for `Claude*` lists **only** `Claude Lens - Daily Sync`.
+  - Row counts after the task: messages 235,835, tool_calls 159,637, session_titles 1,006, files 1,284, sessions 1,089, sync_runs 2.
+  - The SQLite sha256, mtime and size are unchanged.
+- **Commit:** uncommitted. Suggested: `feat(collector): sqlite history migration with parity check and daily sync task`.
+- **Gotchas:**
+  - A pythonw path with spaces (`E:\Projects\Claude Code\…`) works fine as the task's `-Execute` without extra quoting.
+  - The DB test suite is network-bound (≈5 min) and can hit a transient `OperationalError` in fixture setup. Rerun the file before you suspect the code.
+  - `scan` counts are records processed before dedup, so the two post-migration scans' 684 + 13 "messages" added only 433 message rows net (235,402 → 235,835). The rest were streaming snapshots that dedup collapsed.
+- **Notes for the next session:**
+  - The real schema now has real data. Phase 03's API tests must still use the throwaway-schema fixtures. For a manual sanity check, use `claude-lens status` on the real schema; its counts are above.
+  - `settings` rows are jsonb: `plan` is the JSON string `"pro"`. `GET/POST plan` should read and write `v` as a JSON string.
+  - `dismissed_tips.dismissed_at` is `timestamptz` (converted from epoch).
+  - `tool_calls.tool_use_id` is NULL for the 159,328 migrated rows. Phase 06 already accounts for this.
 
 ### 2026-11-22: Phase 01, done
 - **Did:**

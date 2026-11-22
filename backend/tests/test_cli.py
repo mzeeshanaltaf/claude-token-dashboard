@@ -9,7 +9,7 @@ from claude_lens.cli import build_parser, main
 from helpers import q, q1
 
 COMMANDS = ["scan", "migrate-sqlite", "status", "set-password"]
-STUBS = ["migrate-sqlite", "set-password"]
+STUBS = ["set-password"]
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_session.jsonl"
 
 
@@ -39,10 +39,52 @@ def test_scan_flags_parse():
     assert args.full and args.projects_dir == "x" and args.batch_lines == 7
 
 
-def test_scan_rejects_missing_projects_dir(tmp_path, capsys, monkeypatch):
+def test_scan_rejects_missing_projects_dir(tmp_path, capsys, monkeypatch, _sync_log):
     monkeypatch.setenv("DATABASE_URL", "postgresql://unused")
     assert main(["scan", "--projects-dir", str(tmp_path / "nope")]) == 2
     assert "projects dir not found" in capsys.readouterr().err
+    assert "ERROR projects dir not found" in _sync_log.read_text(encoding="utf-8")
+
+
+def test_scan_logs_to_file_without_console_streams(tmp_path, monkeypatch, _sync_log):
+    """Under pythonw sys.stdout/sys.stderr are None: nothing may crash, the file still gets it."""
+    monkeypatch.setenv("DATABASE_URL", "postgresql://unused")
+    monkeypatch.setattr("sys.stdout", None)
+    monkeypatch.setattr("sys.stderr", None)
+    assert main(["scan", "--projects-dir", str(tmp_path / "nope")]) == 2
+    assert "projects dir not found" in _sync_log.read_text(encoding="utf-8")
+
+
+def test_scan_logs_unexpected_errors(tmp_path, monkeypatch, _sync_log, capsys):
+    def boom(*a, **k):
+        raise RuntimeError("kaboom")
+    monkeypatch.setattr(cli, "_scan_with_retries", boom)
+    assert main(["scan"]) == 1
+    text = _sync_log.read_text(encoding="utf-8")
+    assert "unexpected error" in text and "RuntimeError: kaboom" in text
+
+
+def test_sync_log_rotates(monkeypatch, _sync_log):
+    monkeypatch.setattr(cli, "SYNC_LOG_BYTES", 200)
+    cli._open_sync_log(_sync_log)
+    try:
+        for i in range(20):
+            cli.log.info("line %d %s", i, "x" * 40)
+    finally:
+        cli._close_sync_log()
+    assert _sync_log.exists() and _sync_log.with_name(_sync_log.name + ".1").exists()
+    assert not _sync_log.with_name(_sync_log.name + ".2").exists()  # 1 backup only
+
+
+def test_migrate_sqlite_flags_parse():
+    args = build_parser().parse_args(
+        ["migrate-sqlite", "--sqlite", "x.db", "--machine", "pc", "--force", "--check-only",
+         "--chunk", "5"])
+    assert (args.sqlite, args.machine, args.force, args.check_only, args.chunk) == (
+        "x.db", "pc", True, True, 5)
+    defaults = build_parser().parse_args(["migrate-sqlite"])
+    assert defaults.sqlite.endswith("token-dashboard.db") and defaults.machine is None
+    assert not defaults.force and not defaults.check_only
 
 
 # --- against the test schema ----------------------------------------------------
@@ -64,10 +106,11 @@ def cli_env(db, pg_url, pg_schema, tmp_path, monkeypatch):
     return root
 
 
-def test_scan_command_records_a_sync_run(db, cli_env, capsys):
+def test_scan_command_records_a_sync_run(db, cli_env, capsys, _sync_log):
     assert main(["scan", "--projects-dir", str(cli_env)]) == 0
     out = capsys.readouterr().out
     assert "scanned 1 files: 3 messages, 2 tool calls, 0 titles" in out
+    assert "INFO scanned 1 files: 3 messages" in _sync_log.read_text(encoding="utf-8")
     run = q(db, "SELECT machine, status, files, messages, tools, titles, error, finished_at IS NOT NULL"
                 " FROM sync_runs")
     assert run == [("cli-test-pc", "ok", 1, 3, 2, 0, None, True)]

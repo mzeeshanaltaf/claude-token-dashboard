@@ -83,9 +83,9 @@ python3 cli.py dashboard --no-scan   # skip the initial scan (use cached DB only
 
 Change the port: `PORT=9000 python3 cli.py dashboard`.
 
-### Daily background scan (Windows)
+### Daily background sync (Windows)
 
-If you only open the dashboard occasionally, the startup scan has a lot of new transcript data to catch up on. A scheduled task can scan once a day instead, so the dashboard starts quickly:
+The app is being rebuilt as Claude Lens (see `docs/plan/`). The daily scheduled task now feeds the new Postgres database, not this dashboard's SQLite file, which this dashboard still updates itself whenever it starts:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\install_daily_scan.ps1             # daily at 13:00
@@ -93,7 +93,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install_daily_scan.ps1 -At 09:3
 powershell -ExecutionPolicy Bypass -File scripts\install_daily_scan.ps1 -Uninstall
 ```
 
-The task runs `scripts/daily_scan.py` with `pythonw` (no console window) as your user. If the PC is off at the scheduled time, it runs once you're back. Results go to `~/.claude/token-dashboard-scan.log`. On macOS/Linux, use a cron entry instead: `0 13 * * * python3 /path/to/scripts/daily_scan.py`.
+The task, `Claude Lens - Daily Sync`, runs `claude-lens scan` with `backend\.venv\Scripts\pythonw.exe` (no console window) as your user, from the repo root so `.env.local` is found. Run `uv sync` in `backend` first. If the PC is off at the scheduled time, it runs once you're back. Results go to `~/.claude/claude-lens-sync.log`. See `backend/README.md`.
 
 ## The 7 tabs
 

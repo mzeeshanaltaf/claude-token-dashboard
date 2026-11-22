@@ -2,16 +2,19 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 import time
 from dataclasses import dataclass
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional, Sequence
 
 import psycopg
 
 from . import __version__
-from .config import Settings, load_settings
+from .config import Settings, default_sync_log, load_settings
+from .collector import migrate_sqlite as sqlite_migration
 from .collector.ingest import BATCH_LINES, scan
 from .collector.skills_catalog import upload_catalog
 from .db.migrate import applied_versions, migrate
@@ -20,12 +23,62 @@ from .db.pool import connect
 RETRIES = 3          # retries after the first attempt, on psycopg.OperationalError
 RETRY_DELAY = 60     # seconds between attempts
 STALE_RUN_HOURS = 6  # 'running' rows older than this are marked as interrupted
+SYNC_LOG_BYTES = 1_000_000
+DEFAULT_SQLITE = Path.home() / ".claude" / "token-dashboard.db"
 _sleep = time.sleep  # patched in tests
+
+log = logging.getLogger("claude_lens.sync")
 
 
 def _not_implemented(args: argparse.Namespace) -> int:
     print(f"claude-lens {args.command}: not implemented")
     return 1
+
+
+# --------------------------------------------------------------------------
+# sync log
+# --------------------------------------------------------------------------
+
+class _BelowWarning(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.levelno < logging.WARNING
+
+
+def _open_sync_log(path: Path) -> None:
+    """Send `claude_lens.sync` to a rotating file, plus the console when there is one.
+
+    The scheduled task runs under pythonw, where sys.stdout and sys.stderr are
+    None, so the file is the only record of a run. Console output keeps the
+    plain message: info on stdout, warnings and errors on stderr.
+    """
+    _close_sync_log()
+    log.setLevel(logging.INFO)
+    log.propagate = False
+    console = logging.Formatter("%(message)s")
+    if sys.stdout is not None:
+        out = logging.StreamHandler(sys.stdout)
+        out.addFilter(_BelowWarning())
+        out.setFormatter(console)
+        log.addHandler(out)
+    if sys.stderr is not None:
+        err = logging.StreamHandler(sys.stderr)
+        err.setLevel(logging.WARNING)
+        err.setFormatter(console)
+        log.addHandler(err)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fh = RotatingFileHandler(path, maxBytes=SYNC_LOG_BYTES, backupCount=1, encoding="utf-8")
+    except OSError as e:
+        log.warning("cannot open sync log %s: %s", path, e)
+        return
+    fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    log.addHandler(fh)
+
+
+def _close_sync_log() -> None:
+    for h in list(log.handlers):
+        log.removeHandler(h)
+        h.close()
 
 
 # --------------------------------------------------------------------------
@@ -78,8 +131,8 @@ def _scan_once(settings: Settings, root: Path, full: bool, batch_lines: int, sta
         state.run_id = run_id
 
         def progress(t: dict) -> None:
-            print(f"  batch {t['batches']}: {t['files']} files, {t['messages']} messages so far",
-                  flush=True)
+            log.info("  batch %d: %d files, %d messages so far",
+                     t["batches"], t["files"], t["messages"])
 
         try:
             totals = scan(root, conn, machine, full=full, batch_lines=batch_lines, progress=progress)
@@ -89,7 +142,7 @@ def _scan_once(settings: Settings, root: Path, full: bool, batch_lines: int, sta
         except Exception as e:  # noqa: BLE001 - record any failure on the run row
             _finish_run(conn, run_id, "error", None, f"{type(e).__name__}: {e}")
             state.run_id = None
-            print(f"scan failed: {type(e).__name__}: {e}", file=sys.stderr)
+            log.error("scan failed: %s: %s", type(e).__name__, e, exc_info=True)
             return 1
         _finish_run(conn, run_id, "ok", totals, None)
         state.run_id = None
@@ -97,24 +150,22 @@ def _scan_once(settings: Settings, root: Path, full: bool, batch_lines: int, sta
         conn.close()
 
     secs = time.monotonic() - started
-    print(
-        f"scanned {totals['files']} files: {totals['messages']} messages, "
-        f"{totals['tools']} tool calls, {totals['titles']} titles "
-        f"in {totals['batches']} batches; {skills} skills in catalog "
-        f"(machine {machine}, schema {settings.db_schema}, {secs:.1f}s)",
-        flush=True,
+    log.info(
+        "scanned %d files: %d messages, %d tool calls, %d titles in %d batches; "
+        "%d skills in catalog (machine %s, schema %s, %.1fs)",
+        totals["files"], totals["messages"], totals["tools"], totals["titles"],
+        totals["batches"], skills, machine, settings.db_schema, secs,
     )
     return 0
 
 
-def _cmd_scan(args: argparse.Namespace) -> int:
-    settings = load_settings()
+def _scan_with_retries(args: argparse.Namespace, settings: Settings) -> int:
     if not settings.database_url:
-        print("DATABASE_URL is not set (put it in .env.local at the repo root)", file=sys.stderr)
+        log.error("DATABASE_URL is not set (put it in .env.local at the repo root)")
         return 2
     root = Path(args.projects_dir).expanduser() if args.projects_dir else settings.claude_projects_dir
     if not root.is_dir():
-        print(f"projects dir not found: {root}", file=sys.stderr)
+        log.error("projects dir not found: %s", root)
         return 2
     state = _RunState()
     attempt = 0
@@ -124,12 +175,78 @@ def _cmd_scan(args: argparse.Namespace) -> int:
         except psycopg.OperationalError as e:
             state.last_error = str(e).strip()
             if attempt >= RETRIES:
-                print(f"scan failed after {attempt + 1} attempts: {state.last_error}", file=sys.stderr)
+                log.error("scan failed after %d attempts: %s", attempt + 1, state.last_error)
                 return 1
             attempt += 1
-            print(f"database error: {state.last_error}; retry {attempt}/{RETRIES} in {RETRY_DELAY}s",
-                  file=sys.stderr, flush=True)
+            log.warning("database error: %s; retry %d/%d in %ds",
+                        state.last_error, attempt, RETRIES, RETRY_DELAY)
             _sleep(RETRY_DELAY)
+
+
+def _cmd_scan(args: argparse.Namespace) -> int:
+    try:
+        settings = load_settings()
+    except Exception:
+        _open_sync_log(default_sync_log())
+        log.exception("scan failed: invalid configuration")
+        _close_sync_log()
+        return 2
+    _open_sync_log(settings.sync_log)
+    try:
+        return _scan_with_retries(args, settings)
+    except Exception:  # noqa: BLE001 - under pythonw the log is the only place this shows
+        log.exception("scan failed: unexpected error")
+        return 1
+    finally:
+        _close_sync_log()
+
+
+# --------------------------------------------------------------------------
+# migrate-sqlite
+# --------------------------------------------------------------------------
+
+def _cmd_migrate_sqlite(args: argparse.Namespace) -> int:
+    settings = load_settings()
+    if not settings.database_url:
+        print("DATABASE_URL is not set (put it in .env.local at the repo root)", file=sys.stderr)
+        return 2
+    machine = args.machine or settings.machine
+    src_path = Path(args.sqlite).expanduser()
+    started = time.monotonic()
+    print(f"{'parity check' if args.check_only else 'migrating'} {src_path} -> "
+          f"schema {settings.db_schema} (machine {machine})", flush=True)
+    try:
+        conn = connect(settings)
+    except psycopg.OperationalError as e:
+        print(f"cannot connect: {str(e).strip()}", file=sys.stderr)
+        return 1
+    try:
+        if not args.check_only:
+            migrate(conn, settings.db_schema)
+        elif not applied_versions(conn):
+            print("schema not initialised: nothing to check", file=sys.stderr)
+            return 2
+        copied, checks = sqlite_migration.run(
+            src_path, conn, machine, force=args.force, check_only=args.check_only,
+            chunk=args.chunk, progress=lambda m: print(m, flush=True),
+        )
+    except sqlite_migration.MigrationError as e:
+        print(f"migrate-sqlite: {e}", file=sys.stderr)
+        return 2
+    finally:
+        conn.close()
+
+    secs = time.monotonic() - started
+    if copied:
+        print(f"copied {', '.join(f'{n:,} {t}' for t, n in copied.items())} in {secs:.1f}s")
+    print("\nparity (sqlite vs postgres):")
+    print(sqlite_migration.format_checks(checks))
+    bad = [c for c in checks if not c.ok]
+    if bad:
+        print(f"\nparity FAILED: {len(bad)} of {len(checks)} checks differ", file=sys.stderr)
+        return 1
+    print(f"\nparity ok: {len(checks)} checks match ({secs:.1f}s total)")
+    return 0
 
 
 # --------------------------------------------------------------------------
@@ -217,8 +334,23 @@ def build_parser() -> argparse.ArgumentParser:
                        description="Show sync status and database counts.")
     p.set_defaults(func=_cmd_status)
 
+    p = sub.add_parser(
+        "migrate-sqlite", help="Copy history from the old SQLite database into Postgres.",
+        description="One-time copy of the old Token Dashboard SQLite history into Postgres,"
+                    " followed by a parity check (exits non-zero on any mismatch).")
+    p.add_argument("--sqlite", metavar="PATH", default=str(DEFAULT_SQLITE),
+                   help=f"old SQLite database, opened read-only (default {DEFAULT_SQLITE})")
+    p.add_argument("--machine", metavar="NAME",
+                   help="machine label for migrated rows (default: CLAUDE_LENS_MACHINE or hostname)")
+    p.add_argument("--force", action="store_true",
+                   help="truncate the migrated tables first if Postgres already has data")
+    p.add_argument("--check-only", action="store_true",
+                   help="skip the copy; only run the parity check")
+    p.add_argument("--chunk", type=int, default=sqlite_migration.CHUNK_ROWS, metavar="N",
+                   help=f"rows per COPY chunk (default {sqlite_migration.CHUNK_ROWS})")
+    p.set_defaults(func=_cmd_migrate_sqlite)
+
     stubs = {
-        "migrate-sqlite": "Copy history from the old SQLite database into Postgres.",
         "set-password": "Reset the admin password.",
     }
     for name, help_text in stubs.items():

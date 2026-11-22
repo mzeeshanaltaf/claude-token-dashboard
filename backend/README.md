@@ -28,6 +28,35 @@ skill catalog, and retries database errors 3 times, 60 seconds apart. Rows are t
 with `CLAUDE_LENS_MACHINE` (default: the hostname). Everything lives in the `DB_SCHEMA`
 schema (default `claude_dashboard`).
 
+`scan` also logs to `~/.claude/claude-lens-sync.log` (`CLAUDE_LENS_SYNC_LOG`; rotated at
+1 MB, 1 backup), which is the only output when it runs under `pythonw`.
+
+### Daily sync (Windows)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install_daily_scan.ps1     # daily at 13:00 (-At HH:MM, -Uninstall)
+Start-ScheduledTask -TaskName 'Claude Lens - Daily Sync'                    # run it now
+```
+
+The task runs `backend\.venv\Scripts\pythonw.exe -m claude_lens.cli scan` from the repo
+root, so `uv sync` must have been run here first.
+
+## One-time SQLite migration
+
+```bash
+uv run claude-lens migrate-sqlite                       # ~/.claude/token-dashboard.db -> DB_SCHEMA
+uv run claude-lens migrate-sqlite --check-only          # re-run only the parity check
+uv run claude-lens migrate-sqlite --force               # truncate the migrated tables, re-import
+```
+
+The old Token Dashboard SQLite file is opened read-only (`mode=ro`) and read in one
+transaction. Every table is streamed through `COPY` (20,000-row chunks, `--chunk`), one
+transaction per table, followed by `ANALYZE`. `files` offsets are copied verbatim, so the
+next `scan` only reads what changed since the old app's last scan. The command refuses to
+run when the schema already has history, unless `--force`. It ends with a parity table:
+row counts, distinct sessions, the five token sums overall and per model, tool result
+tokens and errors, exact `files` offsets, and the plan. It exits 1 on any mismatch.
+
 ## Database tests
 
 DB tests use `TEST_DATABASE_URL`, falling back to `DATABASE_URL`. Each test session

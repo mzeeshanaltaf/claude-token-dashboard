@@ -109,6 +109,12 @@ def _bool(env: Mapping[str, str], key: str, default: bool) -> bool:
     raise ValueError(f"{key} must be a boolean (true/false), got {value!r}")
 
 
+def default_sync_log(env: Optional[Mapping[str, str]] = None) -> Path:
+    """`CLAUDE_LENS_SYNC_LOG` if set, else ~/.claude/claude-lens-sync.log."""
+    custom = _get(os.environ if env is None else env, "CLAUDE_LENS_SYNC_LOG")
+    return Path(custom).expanduser() if custom else Path.home() / ".claude" / "claude-lens-sync.log"
+
+
 @dataclass(frozen=True)
 class Settings:
     # Secrets are excluded from repr so they never leak into logs or tracebacks.
@@ -120,6 +126,7 @@ class Settings:
     backend_url: str = DEFAULT_BACKEND_URL
     claude_projects_dir: Path = field(default_factory=lambda: Path.home() / ".claude" / "projects")
     machine: str = field(default_factory=socket.gethostname)
+    sync_log: Path = field(default_factory=default_sync_log)
 
     def __post_init__(self) -> None:
         if not _IDENT_RE.match(self.db_schema):
@@ -143,6 +150,7 @@ class Settings:
         machine = _get(env, "CLAUDE_LENS_MACHINE")
         if machine:
             kwargs["machine"] = machine
+        kwargs["sync_log"] = default_sync_log(env)
         return cls(**kwargs)
 
 
