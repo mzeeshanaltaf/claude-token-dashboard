@@ -20,7 +20,7 @@ Status values: `not-started` · `in-progress` · `blocked` · `done`
 ## Baton (replace this section at the end of every session)
 
 - **Current phase:** 05 is done. Next is 06.
-- **Last commit:** `2fd814c docs(plan): record phase 04 commit in handoff`. **Phase 05 is uncommitted** (suggested message in the session log).
+- **Last commit:** `06718a3 feat(frontend): redesigned core pages with daily cost, project filters and tips undo` (phase 05), pushed to `mzeeshanaltaf/main`, plus a docs follow-up that records this hash.
 - **What works:**
   - the redesigned Overview, Prompts, Sessions (list + `/sessions/[id]`), Projects (list + `/projects/[slug]`), Skills, Tips and Settings pages; `pnpm lint` and `pnpm build` are clean (detail routes build as `◐`);
   - backend additions (see Decisions): `/api/daily` per-day `sessions`/`turns`/`cost_usd`/`cost_by_model`, a `project` filter on overview/daily/by-model, `GET /api/projects/daily`, `POST /api/tips/restore`;
@@ -33,7 +33,7 @@ Status values: `not-started` · `in-progress` · `blocked` · `done`
   - **the real `timezone` setting is still `UTC`**, so daily buckets are UTC days. Settings has a one-click "Use this browser's zone" (the user is in Asia/Karachi); the user should decide;
   - `/api/prompts` lists **493** prompts for all time, against 98,948 `turns` (turns counts every `type='user'` record, tool results included). It is the old app's semantics: a prompt needs an assistant row whose `parent_uuid` is the prompt's uuid. Not changed here; worth a look if prompts seem missing;
   - `/activity` and `/tools` are still placeholders (phase 06).
-- **Exact next step:** commit phase 05 (if the user agrees), then start phase 06 with `phase-06-new-features.md`. Read its new "Notes from phase 05" block and `frontend/README.md` § Page patterns first.
+- **Exact next step:** start phase 06 with `phase-06-new-features.md`. Restart the backend first if an old process still holds :8000 (it predates the phase 05 endpoints). Read its new "Notes from phase 05" block and `frontend/README.md` § Page patterns first.
 
 ## Environment facts
 
@@ -222,7 +222,7 @@ Add newest entries at the top, using this template:
     - tip dismiss is optimistic (3 → 2, API 2), Undo restores it (3, API 3);
     - the timezone saves from the browser (Asia/Karachi); a wrong current password shows a message with no logout; a password change signs out to /login, and the new password works.
   - **Console: no hydration warnings or errors** on any page at 1440px or 390px. The only console line is the deliberate wrong-password 400. **No horizontal page overflow at 390px** on any of the 9 pages (wide tables scroll inside their cards). Screenshots in dark and light (Overview) were checked by eye.
-- **Commit:** uncommitted. Suggested: `feat(frontend): redesigned core pages with daily cost, project filters and tips undo`.
+- **Commit:** `06718a3 feat(frontend): redesigned core pages with daily cost, project filters and tips undo`, pushed to `mzeeshanaltaf/main`.
 - **Gotchas:**
   - The `react-hooks/incompatible-library` lint warning on `useReactTable` is suppressed. That's fine **only while the React Compiler is off** (it is; `next.config.ts`). If it's ever enabled, add `"use no memo"` to `DataTable`, or rows go stale.
   - TanStack only sorts columns that have an accessor. `DataTable` adds a no-op accessor to server-sorted display columns. Without it, the headers silently weren't sortable.
