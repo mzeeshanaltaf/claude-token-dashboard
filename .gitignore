@@ -8,3 +8,13 @@ node_modules/
 .superpowers/
 .claude/
 docs/superpowers/
+
+# Secrets: never commit real env files
+.env*
+!.env.example
+
+# Claude Lens build/tooling output
+.next/
+backend/.venv/
+.pytest_cache/
+*.egg-info/

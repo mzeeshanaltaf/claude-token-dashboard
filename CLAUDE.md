@@ -2,6 +2,10 @@
 
 Guidance for Claude Code when working in this repository.
 
+## Redesign in progress: Claude Lens
+
+This app is being rebuilt as **Claude Lens** (Next.js + shadcn frontend, FastAPI backend, Postgres on the VPS), one phase per session. **Before any redesign work, follow the session handoff protocol in [docs/plan/README.md](docs/plan/README.md):** read `docs/plan/README.md`, then `docs/plan/HANDOFF.md`, then the current phase file. At the end of the session, update `HANDOFF.md`. Until phase 07 removes it, the description below still applies to the old app.
+
 ## Project overview
 
 **Token Dashboard** — a local dashboard for tracking Claude Code token usage, costs, and session history. Reads the JSONL transcripts Claude Code writes to `~/.claude/projects/` and turns them into per-prompt cost analytics, tool/file heatmaps, subagent attribution, cache analytics, project comparisons, and a rule-based tips engine.
