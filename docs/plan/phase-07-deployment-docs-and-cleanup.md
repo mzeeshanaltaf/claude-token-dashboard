@@ -24,6 +24,11 @@ docker --version   # if Docker Desktop is available, for a local compose test
 - The **`add-app-to-coolify` skill**. Use it for the Coolify part of this phase.
 - The user's global CLAUDE.md section on VPS Docker disk cleanup. A new compose app adds build cache, and the weekly prune cron covers it, so there's nothing to change.
 - The root `CLAUDE.md` § Git remotes (push to `mzeeshanaltaf`, never `origin`).
+- *(from phase 04)* Frontend build facts:
+  - `next.config.ts` already sets `output: "standalone"`;
+  - `next/font/google` downloads IBM Plex Sans / JetBrains Mono **during `pnpm build`**, so the image build needs outbound network;
+  - `public/` is currently empty (the favicon is `app/icon.svg`); create it, or make the `COPY` conditional;
+  - `BACKEND_URL` is read at request time (no build arg needed). Run the backend with `TRUST_PROXY=true` and `COOKIE_SECURE=true`.
 
 ## Tasks
 

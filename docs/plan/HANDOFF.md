@@ -10,7 +10,7 @@ The living state of the redesign. Read it at the **start** of every session, aft
 | 01 | Postgres schema & batched collector | done | 2026-11-22 | 2026-11-22 | 129 backend tests pass (43 on Postgres); SQLite parity exact on a real project |
 | 02 | SQLite migration & daily sync task | done | 2026-11-22 | 2026-11-22 | parity ok (30/30); daily task live, run #2 ok; 145 backend tests |
 | 03 | FastAPI API & auth | done | 2026-11-22 | 2026-11-22 | 235 backend tests; overview totals = old app exactly ($6,438.7082) |
-| 04 | Frontend shell & login | in-progress | 2026-11-22 | | |
+| 04 | Frontend shell & login | done | 2026-11-22 | 2026-11-22 | lint + build clean; 26/26 browser checks, no hydration warnings |
 | 05 | Frontend core pages | not-started | | | |
 | 06 | New features | not-started | | | |
 | 07 | Deployment, docs & cleanup | not-started | | | |
@@ -19,18 +19,21 @@ Status values: `not-started` · `in-progress` · `blocked` · `done`
 
 ## Baton (replace this section at the end of every session)
 
-- **Current phase:** 03 is done. Next is 04.
-- **Last commit:** `7b47238 feat(api): fastapi endpoints, pagination and single-admin auth on postgres` (phase 03), pushed to `mzeeshanaltaf/main`, plus a docs follow-up that records this hash. The untracked `frontend/` belongs to the phase 04 session and was left out.
+- **Current phase:** 04 is done. Next is 05.
+- **Last commit:** `7de4a9b docs(plan): record phase 03 commit in handoff`. Phase 04 (`frontend/` plus these doc updates) is **uncommitted** until the user approves (the suggested message is in the session log).
 - **What works:**
-  - `uv run uvicorn claude_lens.api.main:app --port 8000` serves every old endpoint from Postgres, plus `auth/*`, `settings`, `sync-status` and `health` (20 paths, all in `/docs`). The full list and shapes are in `backend/README.md` § API and `claude_lens/api/schemas.py`;
-  - login via the `cl_session` cookie, the 7-day sliding expiry, the lockout (5 per (IP, username) per 15 min → 429), the CSRF guard, and `claude-lens set-password <user>`;
-  - the real schema has **one admin user, `admin`**, created by the startup bootstrap on 2026-11-22 (see the session log);
-  - `cd backend && uv run pytest`: **235 tests** (130 on Postgres, 105 offline);
-  - the old app's suite still passes (85), and the old dashboard is untouched.
+  - `frontend/` (Next 16.4.6, React 19.3, shadcn radix-nova, Tailwind v4, TanStack Query). `pnpm lint` and `pnpm build` are clean;
+  - the runtime `/api/*` proxy to `BACKEND_URL`, the `proxy.ts` cookie gate, and the login page (fetch path plus a no-JS `/login/submit` fallback);
+  - the shell: a collapsible sidebar, top bar, range picker (URL plus localStorage), synced badge, Cmd+K (navigation only), Ctrl+B privacy blur, user menu (theme, change password → Settings, log out) and the first-run plan dialog;
+  - `lib/format.ts`, `lib/models.ts`, `lib/chart-colors.ts`, `kpi-card`, `empty-state`, `error-state`, `loading`;
+  - every route (`/overview`, `/activity`, `/prompts`, `/sessions`, `/projects`, `/tools`, `/skills`, `/tips`, `/settings`) is a placeholder in `components/placeholders.tsx` that shows real numbers;
+  - backend: unchanged; 235 tests as of phase 03. The old app is untouched.
 - **What doesn't / open issues:**
-  - the `sync_runs` "stays running after the final retry fails" issue (from phase 01) and the `tool_use_id = NULL` on migrated rows (from phase 02) are unchanged;
-  - `core/names.py` walk-up rarely matches on this PC: Claude Code's slug also maps `_` to `-` and lowercases the drive letter (`e--Projects-…-2-Tools-…`), but `_encode_slug` keeps both. Names fall back to the first cwd (see Decisions). This was ported as-is in phase 00. A fix could go in phase 05 if names look wrong.
-- **Exact next step:** start phase 04 with `phase-04-frontend-shell-and-login.md`. Run the backend locally with `ADMIN_USERNAME`/`ADMIN_PASSWORD` unset (the admin exists) and `COOKIE_SECURE=false`.
+  - carried over: `sync_runs` stays `running` after the final retry fails (phase 01); `tool_use_id = NULL` on migrated rows (phase 02); `core/names.py` slug walk-up rarely matches on this PC (phase 00/03; see Decisions);
+  - the first-run plan dialog was not seen live (the real `settings.plan` is already `"pro"`). It's typed and builds, but is untested in a browser;
+  - the sidebar's collapsed state isn't remembered across reloads (reading its cookie on the server would make the shell dynamic);
+  - `/api/daily` has no cost column, so phase 05's cost sparkline needs a backend addition (see the session log).
+- **Exact next step:** start phase 05 with `phase-05-frontend-core-pages.md`. Run the backend with `COOKIE_SECURE=false TRUST_PROXY=true`, then `cd frontend && pnpm dev`. Replace `components/placeholders.tsx` page by page, and read `frontend/README.md` § Conventions first.
 
 ## Environment facts
 
@@ -58,10 +61,31 @@ Add facts as you learn them. Never record secrets.
 - `starlette.testclient` warns that `httpx` is deprecated in favour of `httpx2`. Harmless for now.
 - The full backend suite takes **~10 min** over the network. Teardown has been fixed (see Decisions), but check `pg_namespace` for stray `claude_lens_test_%` schemas if a run dies.
 - SQLite `files.path` strings are exactly `str(Path)` of the `rglob` under `~/.claude/projects` (for example `C:\Users\…\.claude\projects\<slug>\<id>.jsonl`), the same as the new collector produces. Checked on 2026-11-22 against the live SQLite: with its offsets seeded, the collector would **skip 1,202** files, **rescan 3** (they changed since the last old-app scan) and find **75 missing**.
+- **Frontend (phase 04):** `frontend/` is a pnpm project (`packageManager: pnpm@10.5.2`).
+  - Installed on 2026-11-22: next 16.4.6, react / react-dom 19.3.0, radix-ui 1.8.1, shadcn CLI 4.23.0 (style `radix-nova`, icons `lucide-react` 1.77), tailwindcss 4.3.3 (via the `@tailwindcss/turbopack` loader), @tanstack/react-query 5.108.2, next-themes 0.4.6, recharts 3.8.0, react-day-picker 10, date-fns 4, sonner 2, cmdk 1.1, typescript 5.9.3, openapi-typescript 7.13.0, server-only.
+  - **`cn` (0.5.2) is shadcn's own package** (repo `shadcn-ui/cn`), a compiled replacement for clsx + tailwind-merge. shadcn 4.x components import `cn` from `"cn"`, and `lib/utils.ts` re-exports it. It isn't a typo, so don't swap it out.
+  - Next 16 scaffolds with `cacheComponents: true` + `partialPrefetching: true`; both are kept. Middleware is now **`proxy.ts`**, and the dev server writes `frontend/AGENTS.md` (keep it).
+  - Next's docs ship in `frontend/node_modules/next/dist/docs/`. Read them before using an unfamiliar API: this version differs from older training data.
+  - `next/font/google` (IBM Plex Sans, JetBrains Mono) downloads the fonts **at build time**, so the Docker build needs network access.
+  - Dev: `pnpm dev` on :3000. Next reads env from `frontend/.env*`, not the repo root. `BACKEND_URL` defaults to `http://localhost:8000`, so local dev needs no env file.
+  - Headless browser checks: the system Chrome (`C:/Program Files/Google/Chrome/Application/chrome.exe`) works with `playwright-core`, installed in the session scratchpad and not added to the project.
 
 ## Decisions & deviations
 
 Record anything decided during implementation that isn't in README.md's Decisions table, with the date and the reason.
+
+- **2026-11-22 (phase 04): no `dynamic = "force-dynamic"`.** With Cache Components the route segment config is gone. The API proxy and `/login/submit` call `await connection()` first instead, which has the same effect: they run per request and read `BACKEND_URL` at runtime. The build shows both as `ƒ`.
+- **2026-11-22 (phase 04): `/login` sets `instant = false`** and awaits `searchParams` with no Suspense boundary, so it renders per request. Why: under Cache Components the page was otherwise a prerendered shell plus streamed content, and swapping in the streamed content needs JS. The no-JS fallback then lost `?next=` and the error message. The test caught this.
+- **2026-11-22 (phase 04): the no-JS login posts to `/login/submit`**, a Next route handler that converts the form to JSON and answers with a 303 (the backend's CSRF guard rejects form encoding). It forwards the browser's `Origin`, so cross-site posts are still rejected. `next` goes through `safeNext()` (same-origin paths only).
+- **2026-11-22 (phase 04): a 401 clears the cookie before redirecting.** `lib/api.ts` POSTs `/api/auth/logout` and then goes to `/login?next=…`. Without this, an expired cookie would loop: `proxy.ts` bounces `/login` (cookie present) back to the dashboard.
+- **2026-11-22 (phase 04): the sidebar shortcut is Ctrl/Cmd+\\** (it was +B in shadcn), because Ctrl/Cmd+B is the privacy blur. The change is marked in `components/ui/sidebar.tsx`. `hooks/use-mobile.ts` was rewritten with `useSyncExternalStore` (shadcn's version fails the `react-hooks/set-state-in-effect` lint rule).
+- **2026-11-22 (phase 04): the default range is `All`**, as in the old app. Presets are local calendar days: `7d` = today plus the previous 6 days, from local midnight. Custom ranges are `?since=YYYY-MM-DD&until=YYYY-MM-DD` (`until` inclusive), sent as `until` = the next local midnight (exclusive). Sidebar links carry the URL's range params, so a shared link keeps its range while you move between pages.
+- **2026-11-22 (phase 04): the dashboard pages are static shells.** Data loads client-side with TanStack Query (staleTime 5 min, no refetch on focus, no retry on 4xx). Query keys are `[path, rangeKey, extraQuery]`, built in `lib/queries.ts`.
+- **2026-11-22 (phase 04): Cmd+K lists the pages only for now** (the spec said "empty"). Phase 06 adds search. This shadcn version's `CommandDialog` does **not** add the `<Command>` root, so wrap the children in `<Command>` yourself.
+- **2026-11-22 (phase 04): visual direction "instrument panel".**
+  - Dark ink-navy surfaces (≈ the old `#0A0E14` palette) and a light paper theme.
+  - The primary colour is the legacy blue; IBM Plex Sans for UI, JetBrains Mono (tabular) for numbers. The logo is the old blue→violet tile with the bars seen through a lens ring.
+  - The data colours are the same in both themes.
 
 - **2026-11-22 (phase 03): JSON shape changes beyond the pagination envelopes** (all additive or type-only):
   - `GET /api/sessions` and `GET /api/prompts` return `{items, total, page, page_size}`. Their params are `page`, `page_size` (≤ 200, default 50), `sort`, `order` (`asc`/`desc`; each sort has its own default), `q`, `project`, `model` and `since`/`until`. The old `limit` param is gone.
@@ -128,6 +152,55 @@ Add newest entries at the top, using this template:
 - **Gotchas:** …
 - **Notes for the next session:** <concrete, actionable; these override the phase file where they conflict>
 ```
+
+### 2026-11-22: Phase 04, done
+- **Did:**
+  - scaffolded `frontend/` (create-next-app 16.4.6, then `shadcn init --base radix --preset nova`) and added the 23 components from the spec, plus field, spinner, empty and alert;
+  - set the design tokens (`--chart-input/-output/-cache-write/-cache-read`, `--family-*`, success/warning);
+  - built the API proxy, `proxy.ts`, the typed API client from OpenAPI, the TanStack provider, the login page with its no-JS fallback, the full app shell, the formatting/model/chart-colour helpers, the shared UI pieces, and placeholders for all 9 routes;
+  - set `output: "standalone"`, `/` → `/overview` (a next.config redirect), and an SVG favicon;
+  - wrote `frontend/README.md`.
+- **Files:**
+  - created: everything under `frontend/`. The hand-written parts:
+    - `app/{layout.tsx,globals.css,icon.svg}`, `app/api/[...path]/route.ts`, `app/login/{page.tsx,submit/route.ts}`, `app/(dashboard)/{layout.tsx,<9 routes>/page.tsx}`, `proxy.ts`, `next.config.ts`;
+    - `components/{providers,logo,login-form,kpi-card,empty-state,error-state,loading,placeholders}.tsx`, `components/shell/{app-sidebar,top-bar,range-picker,sync-badge,privacy,kbd,command-menu,user-menu,plan-picker,client-only}.tsx`;
+    - `hooks/use-range.ts`, `lib/{api,api-types,backend,queries,range,format,models,chart-colors,nav,safe-next,login-messages}.ts`;
+    - edited shadcn files: `components/ui/sidebar.tsx` (shortcut) and `hooks/use-mobile.ts`;
+  - changed: this file and the phase 04 file.
+- **Verification:**
+  - `pnpm typecheck`, `pnpm lint`: clean. `pnpm build`: all 9 dashboard routes static (`○`); `/login`, `/login/submit` and `/api/[...path]` dynamic (`ƒ`); proxy present.
+  - **curl through :3000** (backend with `COOKIE_SECURE=false TRUST_PROXY=true`):
+    - signed-out `/overview` → 307 `/login?next=%2Foverview`; signed-out `/api/overview` → 401;
+    - wrong password → 401; `Origin: http://evil.example` → 403;
+    - login → 200 with `set-cookie: cl_session=…; HttpOnly; Max-Age=604800; Path=/; SameSite=lax`. Then `/api/overview` → 200 with **sessions 1,090, projects 85, turns 98,948** (equal to phase 03's totals check), `/login` with the cookie → 307 `/`, and `/overview` → 200;
+    - logout → 200, `Max-Age=0`, then 401;
+    - no-JS: a bad password → 303 `/login?error=invalid&next=…`; good → 303 to `next`; `next=//evil.example/x` → `/overview`; a cross-site form post → 303 `?error=server` (the backend's 403);
+    - lockout: 5×401, then 429, and the form path → `?error=locked&retry=897`, rendered as "Try again in 14 minutes".
+  - **Headless Chrome** (`playwright-core` + system Chrome, scratchpad script) against `pnpm dev`: **26/26 PASS**:
+    - signed out → login; the wrong-password message; sign in → `/overview`, showing **$6,438.71** (all time);
+    - clicking 7d → URL `range=7d`, refetch `/api/overview?since=2026-11-15T19:00:00.000Z`, now **$138.96**; localStorage `lens.range=7d`; reloading `/overview` with no param keeps 7d;
+    - a custom `since`/`until` in the URL is sent as both params; sidebar links carry `?range=30d`;
+    - Ctrl+B: `filter: blur(6px)` and back to `none`, and the sidebar stays expanded; Ctrl+K opens the palette and navigates to `/tools`;
+    - every placeholder shows a number; the light theme toggles; logout → `/login` with no `cl_session` cookie, then `/overview` → login;
+    - **console: no hydration warnings.** The only console error is the expected 401 from the wrong-password attempt;
+    - no-JS context: the error message renders, and sign-in lands on `/sessions?range=7d`.
+  - Screenshots of login, overview (dark and light) and the blurred prompts page were checked by eye.
+- **Login used for the checks:** a temporary user `lens-e2e` with a random password, created in the real `users` table through `claude_lens` helpers, because the admin password isn't available to the session. It was **deleted afterwards**, together with its 3 sessions; `users` again holds only `admin`. 6 failed attempts for the nonexistent `nobody-e2e` sit in the in-memory lockout until the backend restarts (harmless).
+- **Commit:** uncommitted. Suggested: `feat(frontend): next.js shell, login, api proxy and date-range plumbing`.
+- **Gotchas:**
+  - The shadcn CLI writes `import { cn } from "cn"`. That's the real `cn` package, not a broken alias (I briefly "fixed" it and then reverted).
+  - Cache Components: any client component that calls `useSearchParams` (`useRange`, `useRangedQuery`, the sidebar's range links) needs a `<Suspense>` above it. The dashboard layout wraps `children`, and the top bar wraps the range picker.
+  - shadcn's `CommandDialog` needs an explicit `<Command>` child (see Decisions).
+  - `curl --data-urlencode name@file` keeps the file's trailing newline in the value. Trim it before you blame the code.
+  - A `pnpm build` while `pnpm dev` is running didn't disturb the dev server.
+  - The Next dev-tools "N" badge covers the bottom-left of the sidebar in dev only.
+- **Notes for the next session:**
+  - Replace `components/placeholders.tsx` one page at a time. Keep `KpiCard`, `EmptyState`, `ErrorState` and the skeletons, or extend them. Charts: spread `tokenChartConfig` / `familyChartConfig` into the `ChartConfig` and use `var(--color-<key>)` inside the ChartContainer. Load the `dataviz` skill first, as phase 05 says.
+  - **The Overview's "Est. cost" sparkline needs daily cost**, but `/api/daily` only returns tokens (`day`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_create_tokens`). Add `cost_usd` per day in the backend (a phase 05 addition; `core/costs.py` already has the per-model rollup), then run `pnpm gen:api`.
+  - After any backend schema change, run `pnpm gen:api` with the backend running and commit `lib/api-types.ts`.
+  - Settings' change-password form goes at `/settings#password` (the user menu links there). On success the backend revokes all of the user's sessions, so expect a 401 → login afterwards (see phase 03's notes on 400 vs 401).
+  - Mark sensitive text with `blur-sensitive`. For page-level data, use `useRangedQuery(path, extraQuery)`; for paginated tables, put `page`/`sort` in `extraQuery` so they're part of the key.
+  - To check the first-run dialog live: temporarily `DELETE FROM claude_dashboard.settings WHERE k = 'plan'`, or exercise it in a test schema. Restore `"pro"` afterwards (the dialog's Continue does it, or `POST /api/settings {"plan":"pro"}`).
 
 ### 2026-11-22: Phase 03, done
 - **Did:**

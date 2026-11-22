@@ -18,6 +18,8 @@ cd frontend && pnpm dev
 - Every file in `web/routes/` (the old pages): this is the feature inventory to preserve.
 - The `dataviz` skill, **before writing any chart**.
 - HANDOFF.md notes from phase 03 about the pagination envelopes.
+- `frontend/README.md` § Conventions (written in phase 04): the API helpers, `useRangedQuery`, chart colour tokens and `blur-sensitive`. The pages replace `frontend/components/placeholders.tsx`.
+- *(from phase 04)* `/api/daily` returns tokens only. The Est. cost sparkline needs a per-day `cost_usd` added to the backend first; then run `pnpm gen:api`.
 
 ## Tasks
 

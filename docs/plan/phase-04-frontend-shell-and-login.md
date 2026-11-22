@@ -28,26 +28,26 @@ node --version && pnpm --version
 
 ## Tasks
 
-- [ ] Scaffold with the latest stable Next.js: App Router, TypeScript, Tailwind v4, ESLint, pnpm, `src/` optional. Set `output: "standalone"` in `next.config`.
-- [ ] Run `shadcn init`, then add: sidebar, card, button, input, label, table, tabs, badge, tooltip, dropdown-menu, dialog, sheet, command, select, skeleton, sonner, chart, separator, avatar, scroll-area, toggle-group, popover, calendar.
-- [ ] `next-themes`: dark by default, light available. Define design tokens in CSS variables. Keep the token-type colours above as chart tokens (`--chart-input`, `--chart-output`, `--chart-cache-read`, `--chart-cache-write`) and the family colours (opus, sonnet, fable, haiku, mythos).
-- [ ] **API proxy** `app/api/[...path]/route.ts`:
+- [x] Scaffold with the latest stable Next.js: App Router, TypeScript, Tailwind v4, ESLint, pnpm, `src/` optional. Set `output: "standalone"` in `next.config`.
+- [x] Run `shadcn init`, then add: sidebar, card, button, input, label, table, tabs, badge, tooltip, dropdown-menu, dialog, sheet, command, select, skeleton, sonner, chart, separator, avatar, scroll-area, toggle-group, popover, calendar.
+- [x] `next-themes`: dark by default, light available. Define design tokens in CSS variables. Keep the token-type colours above as chart tokens (`--chart-input`, `--chart-output`, `--chart-cache-read`, `--chart-cache-write`) and the family colours (opus, sonnet, fable, haiku, mythos).
+- [x] **API proxy** `app/api/[...path]/route.ts`:
   - forward GET, POST, PUT and DELETE to `process.env.BACKEND_URL` (default `http://localhost:8000`) **at runtime** (`dynamic = "force-dynamic"`);
   - pass the `cookie` request header through, plus every `set-cookie` response header;
   - forward `x-forwarded-for`, `x-forwarded-host` and `origin`;
   - stream the body, which CSV export in phase 06 needs.
   - *(from phase 03)* forward `content-type` too: the backend's CSRF guard rejects any non-GET request that isn't `Content-Type: application/json` (415), **including `POST /api/auth/logout`** (send `{}`), and any `Origin` whose host doesn't match `Host`/`X-Forwarded-Host` (403). Set `X-Forwarded-Host` to the public host. Run the backend with `TRUST_PROXY=true` behind the proxy so the login lockout keys on the real client IP (the last `X-Forwarded-For` hop).
-- [ ] Auth gate in `middleware.ts` (`proxy.ts` if the installed Next version uses that name):
+- [x] Auth gate in `middleware.ts` (`proxy.ts` if the installed Next version uses that name):
   - a request without a `cl_session` cookie on any page except `/login` redirects to `/login?next=…`;
   - `/login` with a cookie redirects to `/`.
-- [ ] `lib/api.ts`: a typed fetch wrapper. A 401 redirects to `/login`. Generate the TS types from the backend OpenAPI (`openapi-typescript`) into `lib/api-types.ts`, and add a `pnpm gen:api` script.
-- [ ] TanStack Query provider. Query keys include the active date range.
-- [ ] **Login page** `/login`:
+- [x] `lib/api.ts`: a typed fetch wrapper. A 401 redirects to `/login`. Generate the TS types from the backend OpenAPI (`openapi-typescript`) into `lib/api-types.ts`, and add a `pnpm gen:api` script.
+- [x] TanStack Query provider. Query keys include the active date range.
+- [x] **Login page** `/login`:
   - a centred shadcn card with the Claude Lens logo, username, password and "Sign in";
   - error and lockout (429) messages;
   - redirect to `next` on success.
   - Follow the `nextjs-progressive-form` skill so the form still works if hydration fails.
-- [ ] **App shell** (`app/(dashboard)/layout.tsx`):
+- [x] **App shell** (`app/(dashboard)/layout.tsx`):
   - **Sidebar** (collapsible, icons and labels): Overview · Activity · Prompts · Sessions · Projects · Tools · Skills · Tips · Settings.
   - **Top bar:**
     - page title;
@@ -57,13 +57,13 @@ node --version && pnpm --version
     - **privacy-blur toggle** (Ctrl/Cmd+B, a `.blur-sensitive` utility);
     - user menu (Change password → Settings, Log out).
   - Mount the client-only pieces (range from localStorage, relative times) with `next/dynamic({ ssr:false })` **as the global CLAUDE.md requires**.
-- [ ] Port the `fmt` helpers to `lib/format.ts` (int, compact, usd, pct, ts, tsTime, modelShort, modelFamily). Port `parseClaudeModel` from `web/routes/overview.js:18-24` to `lib/models.ts`.
-- [ ] Shared UI pieces:
+- [x] Port the `fmt` helpers to `lib/format.ts` (int, compact, usd, pct, ts, tsTime, modelShort, modelFamily). Port `parseClaudeModel` from `web/routes/overview.js:18-24` to `lib/models.ts`.
+- [x] Shared UI pieces:
   - `components/kpi-card.tsx` (label, value, sub-value, optional sparkline, info tooltip);
   - `components/empty-state.tsx` and `components/error-state.tsx`;
   - loading skeletons.
-- [ ] Create a placeholder for each route that renders one real number from its endpoint.
-- [ ] **First-run plan picker:** if `settings.plan` isn't set, show a dialog once (it replaces the old `firstRun` in `web/app.js`).
+- [x] Create a placeholder for each route that renders one real number from its endpoint.
+- [x] **First-run plan picker:** if `settings.plan` isn't set, show a dialog once (it replaces the old `firstRun` in `web/app.js`).
 
 ## Exit criteria
 
@@ -79,3 +79,7 @@ node --version && pnpm --version
 
 - The Next.js, React and shadcn versions installed; whether it's `middleware.ts` or `proxy.ts`.
 - The component conventions you settled on (folder layout, how charts take their colours).
+
+## Outcome
+
+Done 2026-11-22. Next 16.4.6, React 19.3.0, shadcn CLI 4.23.0 (radix-nova); the auth gate is `proxy.ts`. `pnpm lint` and `pnpm build` are clean. A headless-Chrome run against `pnpm dev` and the real backend passed **26/26** checks (redirects, sign-in, real data, range refetch and memory, Ctrl+B, Ctrl+K, logout, no-JS login), with **no hydration warnings**. Deviations: `connection()` instead of `dynamic = "force-dynamic"`, `/login` uses `instant = false`, and the sidebar shortcut moved to Ctrl/Cmd+\\. See HANDOFF.md.
