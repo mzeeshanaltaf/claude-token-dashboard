@@ -22,14 +22,14 @@ uv run python -c "from claude_lens.config import load_settings; import psycopg; 
 ## Tasks
 
 ### Schema & migrations
-- [ ] `db/pool.py`:
+- [x] `db/pool.py`:
   - a `psycopg_pool.ConnectionPool` factory that sets `search_path` to `DB_SCHEMA` for every connection (via `options=-c search_path=…` or a `configure` callback);
   - a helper for one-off connections, used by the CLI.
-- [ ] `db/migrate.py`:
+- [x] `db/migrate.py`:
   - `CREATE SCHEMA IF NOT EXISTS <schema>`, then apply `migrations/NNN_*.sql` in order;
   - record each applied migration in `schema_migrations(version, applied_at)`;
   - wrap each migration in a transaction, and take an advisory lock so the API and the collector can't race.
-- [ ] `migrations/001_init.sql`:
+- [x] `migrations/001_init.sql`:
   - **messages**: the same columns as SQLite, with these changes:
     - `timestamp TIMESTAMPTZ NOT NULL`, `is_sidechain BOOLEAN`, `tool_calls_json JSONB`;
     - new `machine TEXT NOT NULL`;
@@ -46,7 +46,7 @@ uv run python -c "from claude_lens.config import load_settings; import psycopg; 
   - **auth_sessions**: token_hash PK, user_id FK, created_at, expires_at.
 
 ### Collector
-- [ ] `collector/ingest.py`, `scan(projects_root, conn, machine, full=False)`:
+- [x] `collector/ingest.py`, `scan(projects_root, conn, machine, full=False)`:
   - Walk and skip exactly like `scan_dir`: same mtime/size check, resuming from the stored `bytes_read`, with the offset lookup in `files` keyed by `(machine, path)`.
   - Read new lines with the **partial-line guard** from `scan_file`, and record `end_offset` as the offset after the last full line.
   - For each file (or each chunk of about 5,000 lines in big files), run **one transaction**:
@@ -58,8 +58,8 @@ uv run python -c "from claude_lens.config import load_settings; import psycopg; 
     6. Upsert the titles; the last one in file order wins.
     7. Upsert the `files` row with the new offset **in the same transaction**.
   - `full=True` ignores the stored offsets and re-reads everything, which backfills `tool_use_id`. The upserts make it idempotent.
-- [ ] `collector/skills_catalog.py`: add `upload_catalog(conn, machine)`, which replaces this machine's rows in `skill_catalog`.
-- [ ] CLI `claude-lens scan [--full] [--projects-dir]`:
+- [x] `collector/skills_catalog.py`: add `upload_catalog(conn, machine)`, which replaces this machine's rows in `skill_catalog`.
+- [x] CLI `claude-lens scan [--full] [--projects-dir]`:
   1. run migrations;
   2. insert a `sync_runs` row with status `running`;
   3. scan;
@@ -67,14 +67,14 @@ uv run python -c "from claude_lens.config import load_settings; import psycopg; 
   5. finish the run row with `ok` or `error` plus the message;
   6. print the totals.
   Retry network errors (`psycopg.OperationalError`) up to 3 times, 60 seconds apart.
-- [ ] CLI `claude-lens status`: print the last 5 `sync_runs` and the row counts.
+- [x] CLI `claude-lens status`: print the last 5 `sync_runs` and the row counts.
 
 ### Tests
-- [ ] A `backend/tests/conftest.py` fixture:
+- [x] A `backend/tests/conftest.py` fixture:
   - creates a throwaway schema `claude_lens_test_<random>` on `TEST_DATABASE_URL`, falling back to `DATABASE_URL` from `.env.local`;
   - runs migrations into it, yields a connection, then runs `DROP SCHEMA … CASCADE`;
   - skips DB tests when no URL is available.
-- [ ] Port the dedup, rescan, walk and titles tests to the Postgres collector. They must assert **the same totals** as the old tests on `tests/fixtures/sample_session.jsonl`.
+- [x] Port the dedup, rescan, walk and titles tests to the Postgres collector. They must assert **the same totals** as the old tests on `tests/fixtures/sample_session.jsonl`.
 
 ## Exit criteria
 
@@ -87,3 +87,7 @@ uv run python -c "from claude_lens.config import load_settings; import psycopg; 
 
 - How long a single-project scan took over the network, and the batch size you chose.
 - Any difference from SQLite semantics you had to accept.
+
+## Outcome
+
+Done 2026-11-22. All tasks are in place, and the backend suite passes (129 tests, 43 of them against a throwaway Postgres schema). Every exit criterion passed: two scans of a real 81 MB project copy into a test schema, where the second processed 0 files; an exact parity check against the old SQLite scanner on the same copy; and the appended-snapshot check, which left exactly one row. The real `claude_dashboard` schema was never created. One deviation: transactions span several files (about 5,000 lines each) instead of one per file. Details are in HANDOFF.md.

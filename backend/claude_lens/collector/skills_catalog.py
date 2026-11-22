@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 _DEFAULT_ROOTS = [
     Path.home() / ".claude" / "skills",
@@ -86,3 +86,26 @@ def scan_catalog(roots=None) -> Dict[str, dict]:
                 if prev is None or len(md.parts) < len(Path(prev["path"]).parts):
                     catalog[slug] = entry
     return catalog
+
+
+def upload_catalog(conn, machine: str, catalog: Optional[Dict[str, dict]] = None) -> int:
+    """Replace this machine's `skill_catalog` rows with `catalog` (default: scan disk).
+
+    The API runs on the VPS and can't see this PC's skill files, so each
+    collector run uploads them. Other machines' rows are left alone. `conn`
+    must have `search_path` set to the Claude Lens schema and be idle.
+    Returns the number of slugs written.
+    """
+    if catalog is None:
+        catalog = scan_catalog()
+    with conn.transaction():
+        conn.execute("DELETE FROM skill_catalog WHERE machine = %s", (machine,))
+        if catalog:
+            with conn.cursor() as cur:
+                with cur.copy(
+                    "COPY skill_catalog (machine, slug, path, chars, tokens) FROM STDIN"
+                ) as cp:
+                    for slug in sorted(catalog):
+                        e = catalog[slug]
+                        cp.write_row((machine, slug, e["path"], e["chars"], e["tokens"]))
+    return len(catalog)

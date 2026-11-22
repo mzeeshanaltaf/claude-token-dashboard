@@ -25,6 +25,9 @@ packages = ["claude_lens"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "db: needs Postgres (TEST_DATABASE_URL or DATABASE_URL); deselect with -m 'not db'",
+]
 
 [dependency-groups]
 dev = [
