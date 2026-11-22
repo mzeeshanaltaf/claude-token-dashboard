@@ -20,7 +20,7 @@ Status values: `not-started` · `in-progress` · `blocked` · `done`
 ## Baton (replace this section at the end of every session)
 
 - **Current phase:** 06 is done. Next is 07.
-- **Last commit:** `06718a3 feat(frontend): redesigned core pages with daily cost, project filters and tips undo` (phase 05) + docs follow-up `b9dba39`. **Phase 06 is uncommitted** until the user approves the suggested commit (see the session log).
+- **Last commit:** `4540d78 feat: activity insights, deep session view, tools page, cmd+k search and csv export` (phase 06), pushed to `mzeeshanaltaf/main`, plus a docs follow-up that records this hash.
 - **What works:**
   - every page is real now (no placeholders): Activity (KPI cards, 12-month calendar heatmap, hour × weekday heatmap), Tools (calls / result tokens / errors by tool, top files, commands, WebFetch domains), the deep session view (header chips, context growth, cost per turn, tool timeline, subagents, files touched, click-to-turn), Cmd+K search, and CSV export on Sessions / Prompts / Projects;
   - the new endpoints (see Decisions and `backend/README.md` § API); the full backend suite, `pnpm lint` and `pnpm build` are green; the old app is untouched (85 tests OK).
@@ -226,7 +226,7 @@ Add newest entries at the top, using this template:
     - no horizontal overflow at 390px on Activity, Tools, the session, Sessions, Prompts or Projects; **no console errors or hydration warnings**; dark and light screenshots checked by eye.
   - **CSV vs API vs Excel** (opened through Excel COM): sessions **1,090 / 1,090 / 1,090**, prompts `q=commit` **69 / 69 / 69** (after the Excel-cap fix; before it, Excel showed 70), projects 30d **27 / – / 27**.
   - `pg_namespace` afterwards: only `claude_dashboard` (the e2e copy was dropped). The real schema was only read.
-- **Commit:** uncommitted. Suggested: `feat: activity insights, deep session view, tools page, cmd+k search and csv export`.
+- **Commit:** `4540d78 feat: activity insights, deep session view, tools page, cmd+k search and csv export`, pushed to `mzeeshanaltaf/main`.
 - **Gotchas:**
   - The React Compiler lint (`react-hooks/refs`) rejects reading fields off a hook's return object that also contains a ref (`tip.tip`, `tip.hide`). Destructure it.
   - The `<synthetic>` model: zero-usage assistant records (API errors, interruptions) appear inside real sessions. Exclude them from anything that reads "context size".
