@@ -20,15 +20,15 @@ Status values: `not-started` · `in-progress` · `blocked` · `done`
 ## Baton (replace this section at the end of every session)
 
 - **Current phase:** all phases (00–07) are done. The redesign is complete; Claude Lens is live at **`https://claude-lens.zeeshanai.cloud`**.
-- **Last commit:** see the phase 07 session log (the container commit `6248159`, then the phase 07 commit, plus a docs follow-up that records its hash).
+- **Last commit:** `d7d986c feat: deploy claude lens to coolify, rewrite docs and remove the old app` (phase 07, after `6248159 build: dockerfiles and compose for coolify deploy`), pushed to `mzeeshanaltaf/main` and deployed, plus a docs follow-up that records this hash.
 - **What works:**
   - production on Coolify (project "Claude Lens", compose app `claude-lens`, uuid `i4neuadfuivjgyvqfogonscl`, services `backend` + `frontend`), Let's Encrypt cert, DNS `A claude-lens → 76.13.7.106` (TTL 300);
   - signed-out pages → `/login`; `/api/*` without a cookie → 401; the backend has no published port; login / every page / logout work; the "Synced" badge follows the daily task;
   - the old app is gone from the repo (`token_dashboard/`, `web/`, `cli.py`, `start_dashboard.bat`, `tests/`, root `pricing.json`); `~/.claude/token-dashboard.db` is kept on disk;
-  - the collector and the scheduled task use the dedicated `claude_lens` Postgres role (owner of `claude_dashboard` only).
+  - the collector, the scheduled task **and production** use the dedicated `claude_lens` Postgres role (owner of `claude_dashboard` only); nothing uses the `postgres` superuser any more except the test suite (`TEST_DATABASE_URL`).
 - **What doesn't / open issues:**
   - **auto-deploy secrets:** `.github/workflows/deploy.yml` needs the repo secrets `COOLIFY_API_TOKEN` (the *deploy* token, `COOLIFY_API_TOKEN_DEPLOY` in `.env.local`) and `COOLIFY_APP_UUID` = `i4neuadfuivjgyvqfogonscl`. Setting them with `gh secret set` was blocked by the permission classifier; the user adds them in GitHub → Settings → Secrets → Actions. Until then, pushes to main give a red Actions run, and deploys are triggered by hand (Coolify UI, or `POST /api/v1/deploy?uuid=…`);
-  - **production's `DATABASE_URL`:** see the session log for whether Coolify was switched from `postgres` to the `claude_lens` role (it needs the `migrate()` fix deployed first);
+  - the shared Postgres warns **"database postgresdb has a collation version mismatch"** (created with 2.41, the OS provides 2.36). It predates Claude Lens and affects every app in that database; the fix (`REINDEX` + `ALTER DATABASE postgresdb REFRESH COLLATION VERSION`) is the user's call, not this project's;
   - Postgres 5432 is still open to the internet with no firewall (UFW inactive) and no `sslmode=require`; the user skipped that hardening for now;
   - carried over: `sync_runs` stays `running` after the final retry fails (phase 01); `core/names.py` slug walk-up rarely matches on this PC; the first-run plan dialog is still unseen live; the sidebar's collapsed state isn't remembered; the `timezone` setting is still `UTC`.
 - **Exact next step:** none planned. Deferred ideas: the Spend control set (budget, burn-rate forecast, plan value) and multi-machine filters in the UI. Once the user trusts the new app, `~/.claude/token-dashboard.db` can be archived (never deleted by a session).
@@ -239,7 +239,9 @@ Add newest entries at the top, using this template:
   - Headless Chrome on production: **13/13 PASS** (login → `?next`, badge, privacy blur, 5 pages with no skeletons left, session detail, Cmd+K, logout); **no console errors or hydration warnings**.
   - Clean checkout (`git checkout-index` of the staged tree into the scratchpad, plus `.env.local`): `uv sync` + `uv run pytest` → **265 passed** in 728 s; `pnpm install --frozen-lockfile`, `pnpm lint` clean, `pnpm build` clean.
   - `tests/test_migrate.py` after the `migrate()` change: 6 passed. As `claude_lens`: `migrate()` → `[]`, not superuser, 0 of 225 foreign tables readable, `CREATE SCHEMA` denied, `TEMP` allowed, and `claude-lens scan` OK (119 messages).
-- **Commit:** `6248159 build: dockerfiles and compose for coolify deploy` (pushed), then the phase 07 commit (see the docs follow-up).
+  - **Production switched to the `claude_lens` role** after deploying `d7d986c`: Coolify `DATABASE_URL` → `claude_lens@10.0.0.1`, app restarted, backend healthy (so startup migrate + admin check passed as the role); production smoke test again **28/28 PASS** (sessions 1,094, CSV 1,094 = API).
+  - The Actions run for `d7d986c` failed, as expected without the repo secrets; that deploy was triggered through the API instead.
+- **Commit:** `6248159 build: dockerfiles and compose for coolify deploy` and `d7d986c feat: deploy claude lens to coolify, rewrite docs and remove the old app`, both pushed to `mzeeshanaltaf/main`.
 - **Gotchas:**
   - Coolify's API rejects a `:` in an application `description` (422).
   - Coolify stores the compose domain without the port (`docker_compose_domains = {"frontend":{"domain":"https://claude-lens.zeeshanai.cloud"}}`) but still labels Traefik with `loadbalancer.server.port=3000`; check the container labels rather than the API field.

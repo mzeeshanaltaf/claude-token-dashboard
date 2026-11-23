@@ -63,7 +63,7 @@ docker --version   # if Docker Desktop is available, for a local compose test
 - [x] Optional hardening, if the user agrees:
   - a dedicated Postgres role limited to the `claude_dashboard` schema, for both the collector and the backend;
   - `sslmode=require`, or a UFW allowlist on 5432 for the home IP.
-  - *(Done: the `claude_lens` role owns the schema; the collector uses it. sslmode/UFW skipped by the user. See HANDOFF for whether production was switched.)*
+  - *(Done: the `claude_lens` role owns the schema; the collector and production use it. sslmode/UFW skipped by the user.)*
 
 ### Docs
 - [x] Rewrite `README.md` for Claude Lens:
