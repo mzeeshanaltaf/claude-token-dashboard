@@ -1,0 +1,53 @@
+name: Deploy to Coolify
+
+# Redeploys the Claude Lens compose app on Coolify after every push to main.
+# Used instead of Coolify's own git webhook, which fires once and drops the
+# deploy on a transient 502. Coolify's "Auto Deploy" is OFF for this app.
+#
+# Repo secrets (Settings -> Secrets and variables -> Actions):
+#   COOLIFY_API_TOKEN  a Coolify API token with deploy permission
+#   COOLIFY_APP_UUID   the Coolify APPLICATION uuid (not the server uuid)
+
+env:
+  COOLIFY_URL: https://coolify.zeeshanai.cloud
+
+on:
+  push:
+    branches: [main]
+    # Docs-only pushes don't change the images.
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "scripts/**"
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-coolify
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # POST is required (GET gets a 405). 90 s per attempt: the VPS can be busy.
+      - name: Trigger Coolify deploy (with retries)
+        env:
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+          COOLIFY_APP_UUID: ${{ secrets.COOLIFY_APP_UUID }}
+        run: |
+          set -u
+          for i in 1 2 3 4 5; do
+            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 90 -X POST \
+              "${COOLIFY_URL}/api/v1/deploy?uuid=${COOLIFY_APP_UUID}&force=false" \
+              -H "Authorization: Bearer ${COOLIFY_API_TOKEN}" || echo "000")
+            echo "Attempt $i -> HTTP $code"
+            if [ "$code" = "200" ]; then
+              echo "Deploy queued."
+              exit 0
+            fi
+            if [ "$i" -lt 5 ]; then
+              sleep $((i * 20))
+            fi
+          done
+          echo "::error::All 5 attempts to trigger the Coolify deploy failed."
+          exit 1

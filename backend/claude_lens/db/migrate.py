@@ -63,7 +63,14 @@ def migrate(
 
     with conn.transaction():
         _lock(conn, schema)
-        conn.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(ident))
+        # Not `CREATE SCHEMA IF NOT EXISTS`: Postgres checks the database-level
+        # CREATE privilege before the "if not exists", so a role that only owns
+        # its schema (the production setup) would fail here.
+        exists = conn.execute(
+            "SELECT 1 FROM pg_namespace WHERE nspname = %s", (schema,)
+        ).fetchone()
+        if not exists:
+            conn.execute(sql.SQL("CREATE SCHEMA {}").format(ident))
         conn.execute(sql.SQL("SET search_path TO {}").format(ident))
         conn.execute(
             "CREATE TABLE IF NOT EXISTS schema_migrations ("

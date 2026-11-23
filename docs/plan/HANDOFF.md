@@ -13,23 +13,25 @@ The living state of the redesign. Read it at the **start** of every session, aft
 | 04 | Frontend shell & login | done | 2026-11-22 | 2026-11-22 | lint + build clean; 26/26 browser checks, no hydration warnings |
 | 05 | Frontend core pages | done | 2026-11-22 | 2026-11-22 | lint + build clean; old vs new match exactly at a common cutoff; 25/25 browser checks |
 | 06 | New features | done | 2026-11-22 | 2026-11-22 | 265 backend tests; lint + build clean; 32/32 browser checks; CSV rows = API = Excel |
-| 07 | Deployment, docs & cleanup | not-started | | | |
+| 07 | Deployment, docs & cleanup | done | 2026-11-23 | 2026-11-23 | live at `https://claude-lens.zeeshanai.cloud`; prod smoke 28/28, browser 13/13; clean checkout 265 passed + build clean |
 
 Status values: `not-started` · `in-progress` · `blocked` · `done`
 
 ## Baton (replace this section at the end of every session)
 
-- **Current phase:** 06 is done. Next is 07.
-- **Last commit:** `4540d78 feat: activity insights, deep session view, tools page, cmd+k search and csv export` (phase 06), pushed to `mzeeshanaltaf/main`, plus a docs follow-up that records this hash.
+- **Current phase:** all phases (00–07) are done. The redesign is complete; Claude Lens is live at **`https://claude-lens.zeeshanai.cloud`**.
+- **Last commit:** see the phase 07 session log (the container commit `6248159`, then the phase 07 commit, plus a docs follow-up that records its hash).
 - **What works:**
-  - every page is real now (no placeholders): Activity (KPI cards, 12-month calendar heatmap, hour × weekday heatmap), Tools (calls / result tokens / errors by tool, top files, commands, WebFetch domains), the deep session view (header chips, context growth, cost per turn, tool timeline, subagents, files touched, click-to-turn), Cmd+K search, and CSV export on Sessions / Prompts / Projects;
-  - the new endpoints (see Decisions and `backend/README.md` § API); the full backend suite, `pnpm lint` and `pnpm build` are green; the old app is untouched (85 tests OK).
+  - production on Coolify (project "Claude Lens", compose app `claude-lens`, uuid `i4neuadfuivjgyvqfogonscl`, services `backend` + `frontend`), Let's Encrypt cert, DNS `A claude-lens → 76.13.7.106` (TTL 300);
+  - signed-out pages → `/login`; `/api/*` without a cookie → 401; the backend has no published port; login / every page / logout work; the "Synced" badge follows the daily task;
+  - the old app is gone from the repo (`token_dashboard/`, `web/`, `cli.py`, `start_dashboard.bat`, `tests/`, root `pricing.json`); `~/.claude/token-dashboard.db` is kept on disk;
+  - the collector and the scheduled task use the dedicated `claude_lens` Postgres role (owner of `claude_dashboard` only).
 - **What doesn't / open issues:**
-  - **only 0.26% of tool rows have a `tool_use_id`** (175 of 66,884 tool_use rows; the rest were migrated from SQLite). So tool error rates, result tokens by tool and the timeline's red error marks cover only those calls (the UI says so), and `Agent` calls show "not recorded" for their subagent type. **Recommended: run `uv run claude-lens scan --full` once** (from `backend/`; idempotent). It re-reads the 1,205 transcripts still on disk; rows from the 75 deleted files stay as they are. It wasn't run here because it writes to the real schema; the user should decide;
-  - carried over: `sync_runs` stays `running` after the final retry fails (phase 01); `core/names.py` slug walk-up rarely matches on this PC (phase 00/03); the first-run plan dialog is still unseen live; the sidebar's collapsed state isn't remembered;
-  - **the real `timezone` setting is still `UTC`**, so the Activity buckets (and daily charts) are UTC days and hours. The page says so and links to Settings, which has a one-click "Use this browser's zone" (the user is in Asia/Karachi); the user should decide;
-  - `/api/prompts` lists 493 prompts for all time (the old app's "prompt with an answering assistant row" rule); unchanged.
-- **Exact next step:** start phase 07 with `phase-07-deployment-docs-and-cleanup.md`. Ask for the domain first, and read its new "(from phase 06)" notes (CSV streaming through Coolify's proxy, `node .next/standalone/server.js`, the scan `--full` question).
+  - **auto-deploy secrets:** `.github/workflows/deploy.yml` needs the repo secrets `COOLIFY_API_TOKEN` (the *deploy* token, `COOLIFY_API_TOKEN_DEPLOY` in `.env.local`) and `COOLIFY_APP_UUID` = `i4neuadfuivjgyvqfogonscl`. Setting them with `gh secret set` was blocked by the permission classifier; the user adds them in GitHub → Settings → Secrets → Actions. Until then, pushes to main give a red Actions run, and deploys are triggered by hand (Coolify UI, or `POST /api/v1/deploy?uuid=…`);
+  - **production's `DATABASE_URL`:** see the session log for whether Coolify was switched from `postgres` to the `claude_lens` role (it needs the `migrate()` fix deployed first);
+  - Postgres 5432 is still open to the internet with no firewall (UFW inactive) and no `sslmode=require`; the user skipped that hardening for now;
+  - carried over: `sync_runs` stays `running` after the final retry fails (phase 01); `core/names.py` slug walk-up rarely matches on this PC; the first-run plan dialog is still unseen live; the sidebar's collapsed state isn't remembered; the `timezone` setting is still `UTC`.
+- **Exact next step:** none planned. Deferred ideas: the Spend control set (budget, burn-rate forecast, plan value) and multi-machine filters in the UI. Once the user trusts the new app, `~/.claude/token-dashboard.db` can be archived (never deleted by a session).
 
 ## Environment facts
 
@@ -74,9 +76,26 @@ Add facts as you learn them. Never record secrets.
   - **Phase 06 endpoint timings from this PC** (~150 ms per round-trip; much faster on the VPS): calendar 1.4 s, hourly 0.7 s, summary 4.3 s (all) / 1.7 s (30d; about 9 round-trips), the biggest session's insights 0.8 s, tools insights 1.7 s, search 0.6–1.3 s.
   - Old app on a copy of its DB, with nothing to rescan: `PORT=8080 python cli.py dashboard --no-scan --no-open --db <copy> --projects-dir <empty dir>`. Its 30-second scan loop always runs, even with `--no-scan`, so never point it at the real DB for a frozen comparison.
 
+- **Production (phase 07, 2026-11-23):**
+  - URL `https://claude-lens.zeeshanai.cloud`. Coolify 4.7.6 on the VPS (`76.13.7.106`); server uuid `j1234smx72kcb6aeovlaa9f7`; project "Claude Lens" `txenuvqynofvku8xivj9vrbz`; compose app `claude-lens` `i4neuadfuivjgyvqfogonscl` (build pack `dockercompose`, `/docker-compose.yml`, branch `main`, Coolify auto-deploy **off**). Domain on the `frontend` service only; Traefik routes to container port 3000.
+  - Coolify API: over SSH at `http://localhost:8000/api/v1`. Tokens in `.env.local` as `COOLIFY_API_TOKEN_ROOT` (setup) and `COOLIFY_API_TOKEN_DEPLOY` (for the Actions secret). Never print them.
+  - Production env (in Coolify only): `DATABASE_URL` with host **`10.0.0.1`** (the docker0 gateway; Postgres runs in a separate compose project `postgres-pgvector` publishing 5432, not a Coolify resource), `DB_SCHEMA`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `COOKIE_SECURE=true`, `TRUST_PROXY=true`. All runtime, none build-time.
+  - Images: backend `python:3.12-slim` + uv 0.8.3 (271 MB), user `claudelens` (uid 10001); frontend `node:24-slim` standalone (293 MB), user `node`, `node server.js`. Both have Docker health checks; the backend is healthy ~6 s after start.
+  - Host port 8000 on the VPS is **Coolify's own** API/UI (its `/api/health` answers plain `OK`), not ours; our backend is `expose`-only.
+  - **Postgres role `claude_lens`** (2026-11-23): `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE`, `CONNECT` on `postgresdb`, owner of schema `claude_dashboard` and its 11 tables. It can read 0 of the 225 tables in other schemas and can't create schemas; it has `TEMP` (default PUBLIC grant), which the collector's staging needs. `.env.local`: `DATABASE_URL` = this role; `TEST_DATABASE_URL` = the previous superuser URL (the tests create schemas). The database `postgresdb` is shared by ~28 other apps' schemas.
+  - Docker Desktop on the PC isn't running by default; start it (`Docker Desktop.exe`) before a local compose test.
+
 ## Decisions & deviations
 
 Record anything decided during implementation that isn't in README.md's Decisions table, with the date and the reason.
+
+- **2026-11-23 (phase 07): domain `claude-lens.zeeshanai.cloud`** (user's choice over `lens.`). The repo keeps its name `claude-token-dashboard` (user).
+- **2026-11-23 (phase 07): no new admin password.** The real `users` table already holds the admin, and `ADMIN_PASSWORD` is only read while `users` is empty, so generating a new one would have had no effect. Coolify gets the `.env.local` values as a fallback; the production login is the existing admin account.
+- **2026-11-23 (phase 07): `docker-compose.yml` uses `expose: 3000` for the frontend, not `ports`.** A `ports` mapping would grab a host port on the shared VPS; Coolify's Traefik reaches the container on its network. `docker-compose.local.yml` adds `127.0.0.1:3002:3000` and `COOKIE_SECURE=false` for the local smoke test.
+- **2026-11-23 (phase 07): the frontend image creates `public/`** (`mkdir -p public` before the build) instead of committing an empty folder.
+- **2026-11-23 (phase 07): `migrate()` no longer runs `CREATE SCHEMA IF NOT EXISTS`.** Postgres checks the database-level `CREATE` privilege before the "if not exists", so the dedicated role (which only owns its schema) failed. It now checks `pg_namespace` and creates the schema only when it's missing.
+- **2026-11-23 (phase 07): the deploy workflow ignores docs-only pushes** (`docs/**`, `**/*.md`, `scripts/**`), since those don't change the images.
+- **2026-11-23 (phase 07): README screenshots are taken with the privacy blur on**, and the session-detail shot was dropped (its title, project and branch aren't blurred enough). The Activity shot is cropped to the heatmaps for the same reason.
 
 - **2026-11-22 (phase 06): new endpoints and their shapes** (all additive; pinned in `api/schemas_insights.py`, split from `schemas.py` to keep files small):
   - `GET /api/activity/calendar?metric=cost|tokens&days=365` (7–1100) → `{metric, timezone, start, end, days: [{day, value, cost_usd, tokens, sessions, turns}]}`. It lists **active days only**; the UI fills the grid. Cost is the `/api/daily` rollup (`daily_model_tokens` + `cost_by_model_per_key`).
@@ -201,6 +220,37 @@ Add newest entries at the top, using this template:
 - **Gotchas:** …
 - **Notes for the next session:** <concrete, actionable; these override the phase file where they conflict>
 ```
+
+### 2026-11-23: Phase 07, done
+- **Did:**
+  - containers: `backend/Dockerfile`, `frontend/Dockerfile`, both `.dockerignore`, root `docker-compose.yml` + `docker-compose.local.yml`; local compose smoke test against the real DB;
+  - Coolify: project + compose app via the API, env vars, first deploy, DNS `A` record via the Hostinger DNS API, Let's Encrypt cert, Coolify auto-deploy off, `.github/workflows/deploy.yml`;
+  - hardening: the `claude_lens` Postgres role (schema owner only) + the `migrate()` fix it needed; `.env.local` switched;
+  - docs: README (new screenshots), root CLAUDE.md, CONTRIBUTING.md, KNOWN_LIMITATIONS.md, `.env.example`, `backend/README.md`;
+  - cleanup: removed the old app (`token_dashboard/`, `web/`, `cli.py`, `start_dashboard.bat`, `tests/`, root `pricing.json`) and the old screenshots.
+  - The user had already run `claude-lens scan --full` before this session: **57,099 of 67,334 tool calls (84.8%) now have a `tool_use_id`** (was 0.26%); the Tools page shows "Linked calls 85%".
+- **Files:** created `backend/Dockerfile`, `backend/.dockerignore`, `frontend/Dockerfile`, `frontend/.dockerignore`, `docker-compose.yml`, `docker-compose.local.yml`, `.github/workflows/deploy.yml`, `docs/images/lens_{overview,activity,sessions,projects,tools}.png` / changed `README.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `docs/KNOWN_LIMITATIONS.md`, `.env.example`, `backend/README.md`, `backend/claude_lens/db/migrate.py`, this file, the phase 07 file / deleted `token_dashboard/`, `web/`, `cli.py`, `start_dashboard.bat`, `tests/`, `pricing.json`, `docs/images/dashboard_*.png`.
+- **Verification:**
+  - Local compose (`docker compose … up`, frontend on :3002, real DB): scripted smoke test **28/28 PASS**.
+  - Production (`https://claude-lens.zeeshanai.cloud`): smoke test **28/28 PASS**. Signed-out `/overview` → 307 `/login?next=%2Foverview`; `curl /api/overview` without a cookie → **401**; login sets `cl_session` with `HttpOnly; Max-Age=604800; Path=/; SameSite=lax; Secure`; overview sessions 1,093 / turns 99,674 / $6,485.06; all 9 pages and 8 APIs 200; Cmd+K search 200; **sessions CSV 1,093 rows = API total 1,093** through Coolify's proxy (streamed, `text/csv`, attachment); logout → 401.
+  - Cert: issuer `Let's Encrypt, CN=YR2`, subject `CN=claude-lens.zeeshanai.cloud`. DNS resolves on 1.1.1.1 and 8.8.8.8.
+  - Port checks from the PC: `76.13.7.106:8000/api/overview` → 404 (Coolify's own app), `:3000` → no connection. Inside the VPS both containers are `healthy` with no published ports.
+  - "Synced" badge: `last_synced_at` 19:03:05Z → triggered `Claude Lens - Daily Sync` → task result 0, run `ok` (231 messages) → **19:21:49Z** on production; the badge read "Synced 1m ago".
+  - Headless Chrome on production: **13/13 PASS** (login → `?next`, badge, privacy blur, 5 pages with no skeletons left, session detail, Cmd+K, logout); **no console errors or hydration warnings**.
+  - Clean checkout (`git checkout-index` of the staged tree into the scratchpad, plus `.env.local`): `uv sync` + `uv run pytest` → **265 passed** in 728 s; `pnpm install --frozen-lockfile`, `pnpm lint` clean, `pnpm build` clean.
+  - `tests/test_migrate.py` after the `migrate()` change: 6 passed. As `claude_lens`: `migrate()` → `[]`, not superuser, 0 of 225 foreign tables readable, `CREATE SCHEMA` denied, `TEMP` allowed, and `claude-lens scan` OK (119 messages).
+- **Commit:** `6248159 build: dockerfiles and compose for coolify deploy` (pushed), then the phase 07 commit (see the docs follow-up).
+- **Gotchas:**
+  - Coolify's API rejects a `:` in an application `description` (422).
+  - Coolify stores the compose domain without the port (`docker_compose_domains = {"frontend":{"domain":"https://claude-lens.zeeshanai.cloud"}}`) but still labels Traefik with `loadbalancer.server.port=3000`; check the container labels rather than the API field.
+  - The Coolify env list shows every compose variable twice (production + preview).
+  - `CREATE SCHEMA IF NOT EXISTS` needs database `CREATE` even when the schema exists (see Decisions).
+  - Setting GitHub repo secrets with `gh secret set` was blocked by the auto-mode classifier; leave it to the user.
+  - `~/.claude/token-dashboard.db` is now 269,238,272 bytes, mtime 2026-11-22 16:59 local (an old-app run in an earlier session touched it). This session never opened it.
+- **Notes for the next session:**
+  - Re-run the production checks with the scratchpad-style scripts: an httpx smoke test (login from `.env.local`, never printing it) and `playwright-core` with the system Chrome. Take README screenshots with Ctrl+B on.
+  - Redeploy by hand: `POST /api/v1/deploy?uuid=i4neuadfuivjgyvqfogonscl&force=false` over SSH with the root token on stdin, then poll `/api/v1/deployments/<uuid>` (top-level `status`).
+  - The backend suite needs `TEST_DATABASE_URL` (the superuser URL) now that `DATABASE_URL` is the restricted role.
 
 ### 2026-11-22: Phase 06, done
 - **Did:**

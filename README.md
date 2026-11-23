@@ -1,173 +1,183 @@
-# Claude Code Token Dashboard
+# Claude Lens
 
-A local dashboard that reads the JSONL transcripts Claude Code writes to `~/.claude/projects/` and turns them into per-prompt cost analytics, tool/file heatmaps, subagent attribution, cache analytics, project comparisons, and a rule-based tips engine.
+**Usage, cost & workflow analytics for Claude Code.** A collector on your PC reads the JSONL transcripts Claude Code writes to `~/.claude/projects/` and pushes them to your own Postgres. A login-protected dashboard on your own server turns them into per-prompt cost, daily and per-project spend, cache analytics, activity heatmaps, a deep per-session view, tool and file insights, search, CSV export and a rule-based tips engine.
 
-**Everything runs locally.** No data leaves your machine — no telemetry, no API calls for your data, no login.
+Self-hosted: your transcripts only ever go to your own database and your own server. No third-party telemetry.
 
-![Overview tab — KPI cards with per-category costs, daily charts, per-project and per-model breakdowns](docs/images/dashboard_overview.png)
+![Overview: est. cost, sessions, prompts and cache hit rate, token composition and daily activity](docs/images/lens_overview.png)
 
-## What this is useful for
+## What's in it
 
-- Seeing which of your prompts are expensive (surprise: they usually involve large tool results).
-- Comparing token usage across projects you've worked on — click any project to drill into its sessions.
-- Spotting wasteful patterns — the same file read twenty times in a session, a tool call returning 80k tokens.
-- Understanding what a "cache hit" actually saves you.
-- If you're on Pro or Max, confirming you're getting your money's worth in API-equivalent dollars.
+| Page | What it shows |
+|---|---|
+| **Overview** | Estimated cost, sessions, prompts and cache hit rate with sparklines; token composition (input / output / cache read / cache write, as tokens or cost); daily tokens or cost per model; model mix; top projects, top tools and recent sessions. |
+| **Activity** | A 12-month calendar heatmap (cost or tokens per day), an hour × weekday grid, streaks, the busiest day and peak hour. |
+| **Prompts** | Every prompt with the full cost of the turn that answered it; search, sort by tokens / cost / recency, a detail sheet with the full text. |
+| **Sessions** | Server-paginated, sortable and filterable by project and model. Each session opens a deep view: context growth per turn (with compactions), cost per turn, a tool timeline, subagents, files touched and the turn-by-turn table. |
+| **Projects** | Per-project cost with a daily sparkline; each project has its own overview. |
+| **Tools** | Calls, result tokens and error rates by tool; the most-read files, shell commands and WebFetch domains. |
+| **Skills** | Which skills you invoke and what loading them costs. |
+| **Tips** | Rule-based suggestions (repeated reads, oversized tool results, low cache hit rate…), dismissible with undo. |
+| **Settings** | Your plan (API / Pro / Max / Max 20x), timezone, sync status per machine, change password. |
+
+Everywhere: a global date range (7d / 30d / 90d / All / custom, kept in the URL), **Cmd/Ctrl+K** search across prompts, sessions and projects, **Export CSV** on Sessions / Prompts / Projects, dark and light themes, and **Cmd/Ctrl+B** to blur prompt text and project names when you share your screen.
+
+| | |
+|---|---|
+| ![Activity heatmaps](docs/images/lens_activity.png) | ![Tools page](docs/images/lens_tools.png) |
+| ![Sessions list (privacy blur on)](docs/images/lens_sessions.png) | ![Projects list (privacy blur on)](docs/images/lens_projects.png) |
+
+## Architecture
+
+```
+Windows PC                                     VPS (Coolify, docker compose)
+┌───────────────────────────┐  psycopg/5432   ┌──────────────────┐   ┌────────────────────────┐
+│ collector (daily task)    │ ──────────────▶ │ Postgres         │◀──│ backend  FastAPI :8000 │ internal only
+│ ~/.claude/projects/*.jsonl│  batched COPY   │ schema           │   └───────────▲────────────┘
+│ ~/.claude/skills (catalog)│                 │ claude_dashboard │               │ /api/* proxy
+└───────────────────────────┘                 └──────────────────┘   ┌───────────┴────────────┐
+                                               browser ─HTTPS──▶     │ frontend Next.js :3000 │ public domain
+                                                                     └────────────────────────┘
+```
+
+- **Collector** (`backend/claude_lens/collector`, `claude-lens scan`): incremental (per-file mtime + byte offset), batched `COPY` into Postgres, de-duplicates streaming snapshots. Runs once a day from a Windows Scheduled Task, or by hand.
+- **Backend** (`backend/`): FastAPI + psycopg 3, raw SQL. Single admin login with server-side sessions. Applies its migrations on startup.
+- **Frontend** (`frontend/`): Next.js 16 + shadcn/ui + TanStack Query/Table + Recharts. A route handler proxies `/api/*` to the backend at request time, so the browser only ever talks to one origin and the backend is never public.
 
 ## Prerequisites
 
-- **Python 3.8 or newer** — already installed on macOS and most Linux. On Windows: `winget install Python.Python.3.12` or download from python.org.
-- **Claude Code** — installed and with at least one session run. The dashboard reads those sessions. If you just installed Claude Code and haven't used it yet, run at least one prompt first.
-- **A web browser.** Any modern one.
+- **Claude Code**, with at least one session run.
+- **Postgres** (developed and run on 17) reachable from your PC. All tables live in one schema (`claude_dashboard` by default).
+- **Python 3.12** and **[uv](https://docs.astral.sh/uv/)** for the backend and collector.
+- **Node 22+** and **pnpm 10** for the frontend.
+- **Docker** only for the container smoke test and deployment.
 
-No `pip install`. No Node.js. No build step.
-
-## Quickstart
-
-```bash
-git clone https://github.com/nateherkai/token-dashboard.git
-cd token-dashboard
-python cli.py dashboard
-```
-
-> On Windows, if `python3` isn't on your PATH, substitute `py -3` for `python3` in every command below. You can also double-click [`start_dashboard.bat`](start_dashboard.bat) to launch the dashboard without opening a terminal.
-
-The command:
-1. Scans `~/.claude/projects/` (first run can take 20–60 seconds on a heavy user's machine).
-2. Starts a local server at http://127.0.0.1:8080.
-3. Opens your default browser to that URL.
-
-Leave it running; it re-scans every 30 seconds and pushes updates live. Stop with `Ctrl+C`.
-
-## Where the data comes from
-
-Claude Code writes one JSONL file per session here:
-
-| OS | Path |
-|---|---|
-| macOS / Linux | `~/.claude/projects/<project-slug>/<session-id>.jsonl` |
-| Windows | `C:\Users\<you>\.claude\projects\<project-slug>\<session-id>.jsonl` |
-
-The dashboard never modifies those files — it only reads them and keeps a local SQLite cache at `~/.claude/token-dashboard.db`.
-
-To point at a different location:
+## Local development
 
 ```bash
-python3 cli.py dashboard --projects-dir /path/to/projects --db /path/to/cache.db
+git clone https://github.com/mzeeshanaltaf/claude-token-dashboard.git
+cd claude-token-dashboard
+cp .env.example .env.local        # then fill in DATABASE_URL, ADMIN_USERNAME, ADMIN_PASSWORD
+
+# backend (from backend/)
+cd backend
+uv sync
+uv run pytest                     # full suite; DB tests use a throwaway schema (-m "not db" to skip them)
+COOKIE_SECURE=false TRUST_PROXY=true uv run uvicorn claude_lens.api.main:app --port 8000
+
+# frontend (from frontend/, in a second terminal)
+cd frontend
+pnpm install
+pnpm dev                          # http://localhost:3000
+pnpm lint && pnpm build
 ```
 
-### Environment variables
+The backend reads `.env.local` from the repo root. On first start it creates the admin user from `ADMIN_USERNAME` / `ADMIN_PASSWORD` (only while the `users` table is empty). The frontend needs no env file: `BACKEND_URL` defaults to `http://localhost:8000`.
 
-| Var | Default | Purpose |
-|---|---|---|
-| `PORT` | `8080` | Port the local web server listens on |
-| `HOST` | `127.0.0.1` | Bind address. Keep the default. Setting `0.0.0.0` exposes your entire prompt history to anyone on your local network — don't do this on any network you don't fully control (no coffee-shop Wi-Fi, no coworking spaces). |
-| `CLAUDE_PROJECTS_DIR` | `~/.claude/projects` | Where to scan for session JSONL files |
-| `TOKEN_DASHBOARD_DB` | `~/.claude/token-dashboard.db` | SQLite cache location |
-
-Pricing lives in [`pricing.json`](pricing.json). Edit it directly if model prices change or to add a new plan — the running server picks up edits on the next request, no restart needed (if the file is briefly invalid mid-save, the last good copy is used). Current rates are sourced from the [Anthropic pricing page](https://platform.claude.com/docs/en/about-claude/pricing).
-
-## CLI reference
+To test the production containers locally:
 
 ```bash
-python3 cli.py scan          # populate / refresh the local DB, then exit
-python3 cli.py today         # today's totals (terminal)
-python3 cli.py stats         # all-time totals (terminal)
-python3 cli.py tips          # active suggestions (terminal)
-python3 cli.py dashboard     # scan + serve the UI at http://localhost:8080
-
-# dashboard flags
-python3 cli.py dashboard --no-open   # don't auto-open the browser
-python3 cli.py dashboard --no-scan   # skip the initial scan (use cached DB only)
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.local.yml up --build
+# http://localhost:3002
 ```
 
-Change the port: `PORT=9000 python3 cli.py dashboard`.
+## Collector setup (on the PC with the transcripts)
 
-### Daily background sync (Windows)
+```powershell
+cd backend
+uv sync
+uv run claude-lens scan            # first run reads every transcript; later runs only new lines
+uv run claude-lens status          # last sync runs and row counts
+```
 
-The app is being rebuilt as Claude Lens (see `docs/plan/`). The daily scheduled task now feeds the new Postgres database, not this dashboard's SQLite file, which this dashboard still updates itself whenever it starts:
+**Coming from the old Token Dashboard?** Copy its SQLite history first, because Claude Code deletes old transcripts and a rescan would lose them:
+
+```powershell
+uv run claude-lens migrate-sqlite  # ~/.claude/token-dashboard.db -> Postgres, with a parity check
+uv run claude-lens scan --full     # then link tool calls to their results for transcripts still on disk
+```
+
+**Daily sync (Windows).** Registers the `Claude Lens - Daily Sync` scheduled task (daily at 13:00, or as soon as the PC is back on):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\install_daily_scan.ps1             # daily at 13:00
 powershell -ExecutionPolicy Bypass -File scripts\install_daily_scan.ps1 -At 09:30   # custom time
 powershell -ExecutionPolicy Bypass -File scripts\install_daily_scan.ps1 -Uninstall
+Start-ScheduledTask -TaskName 'Claude Lens - Daily Sync'                            # run it now
 ```
 
-The task, `Claude Lens - Daily Sync`, runs `claude-lens scan` with `backend\.venv\Scripts\pythonw.exe` (no console window) as your user, from the repo root so `.env.local` is found. Run `uv sync` in `backend` first. If the PC is off at the scheduled time, it runs once you're back. Results go to `~/.claude/claude-lens-sync.log`. See `backend/README.md`.
+It runs `backend\.venv\Scripts\pythonw.exe -m claude_lens.cli scan` from the repo root (so `.env.local` is found) and logs to `~/.claude/claude-lens-sync.log`. The dashboard's "Synced" badge shows when the last run finished.
 
-## The 7 tabs
+## Configuration
 
-The dashboard is a single page with a hash-router tab bar across the top. Each tab is backed by its own JSON API under `/api/`:
+Set these in `.env.local` locally and in Coolify's environment settings in production. Never commit real values.
 
-- **Overview** — KPI cards for total projects, sessions, turns, estimated cost, and all token categories (input / output / cache read / cache create). Each token card also shows its own estimated cost, so you can see at a glance where your spend concentrates. Daily work and cache-read charts, tokens by project, cost by project (top 10 by estimated cost; click a bar to open the project), a token-usage-by-model sunburst (inner ring = Claude model family, outer ring = version with its share; hover a family to highlight its models, click to zoom in), top tools by call count, and recent sessions. Supports 7d / 30d / 90d / All time ranges. This is the landing tab.
-- **Prompts** — user prompts filterable by date range (7d / 30d / 90d / All, default All; the range is shared with the Overview tab) and sortable by most tokens or most recent. Click any row to expand the full prompt text, token details, and a link to the originating session.
-- **Sessions** — list of sessions with sortable columns (started, turns, tokens, estimated cost). Click a session ID to open the turn-by-turn detail view, where every turn shows its local timestamp, model, token counts, and a clickable prompt/tools cell that expands to the full text in a modal.
-- **Projects** — per-project comparison with sortable columns (sessions, turns, core tokens, estimated cost). Click any project name to open a dedicated project page: a KPI summary (total sessions, turns, core tokens, cache reads, and estimated cost) above all its sessions, each showing started/ended times, turns, tokens, and estimated cost. Each session links directly to its turn-by-turn detail view.
-- **Skills** — which skills you invoke most often, and (where we can measure them) their token cost. See [limitations](docs/KNOWN_LIMITATIONS.md#skills-token-counts-are-partial).
-- **Tips** — rule-based suggestions for reducing token usage (repeated file reads, oversized tool results, low cache-hit rate, etc.).
-- **Settings** — switch pricing between API / Pro / Max / Max-20x so cost figures everywhere else reflect your actual plan.
+| Variable | Used by | Default | Purpose |
+|---|---|---|---|
+| `DATABASE_URL` | backend, collector | (required) | `postgresql://user:password@host:5432/dbname` |
+| `DB_SCHEMA` | backend, collector | `claude_dashboard` | The schema every table lives in |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | backend | (required on first boot) | Creates the single admin while `users` is empty; ignored afterwards. Password ≥ 8 characters |
+| `COOKIE_SECURE` | backend | `true` | Set `false` only for plain `http://localhost` |
+| `TRUST_PROXY` | backend | `false` (`true` in compose) | Read the client IP from the last `X-Forwarded-For` hop (for the login lockout) |
+| `BACKEND_URL` | frontend | `http://localhost:8000` | Where the Next.js proxy sends `/api/*`; read per request, not at build |
+| `CLAUDE_PROJECTS_DIR` | collector | `~/.claude/projects` | Transcript folder |
+| `CLAUDE_LENS_MACHINE` | collector | hostname | Machine label stored with synced rows |
+| `CLAUDE_LENS_SYNC_LOG` | collector | `~/.claude/claude-lens-sync.log` | Rotating sync log |
+| `TEST_DATABASE_URL` | tests | `DATABASE_URL` | Postgres for the DB tests (throwaway `claude_lens_test_*` schemas, so this user needs `CREATE` on the database) |
 
-The Overview tab also has a built-in "What do these numbers mean?" panel that explains input/output/cache tokens in plain English.
+**Recommended: a dedicated database role.** The app only needs to own its schema. Create a login role (no superuser, no `CREATEDB`), `GRANT CONNECT` on the database, and make it the owner of the `claude_dashboard` schema and its tables (`ALTER SCHEMA … OWNER TO`, `ALTER TABLE … OWNER TO`). Use it in `DATABASE_URL` for both the collector and the backend; migrations work without database-level `CREATE` once the schema exists. Keep a more privileged URL in `TEST_DATABASE_URL` for the test suite.
 
-![Projects tab — per-project comparison with estimated cost](docs/images/dashboard_projects.png)
+Pricing lives in [`backend/pricing.json`](backend/pricing.json) (per-model rates and plans), sourced from the [Anthropic pricing page](https://platform.claude.com/docs/en/about-claude/pricing). The API reloads it when the file changes.
 
-![Sessions tab — sortable session list with local timestamps and estimated cost](docs/images/dashboard_sessions.png)
+## Deployment (Coolify)
 
-### Privacy controls
+Production runs as a Docker Compose application on Coolify ([`docker-compose.yml`](docker-compose.yml)): `backend` (FastAPI, `expose` only, never published) and `frontend` (Next.js standalone, the only service with a domain).
 
-Press **Cmd+B** (macOS) or **Ctrl+B** (Windows/Linux) on any tab to blur all prompt text and project names — useful when sharing your screen. On the Overview "Tokens by project" and "Cost by project" charts this blurs only the project-name labels, leaving the bars and axes readable.
+1. In Coolify, create a **Docker Compose** application from this repo, branch `main`, compose file `/docker-compose.yml`.
+2. Give the **frontend** service the domain, with port 3000 (`https://your.domain:3000`; the port is the container port Traefik routes to). Coolify issues the Let's Encrypt certificate once DNS points at the server.
+3. Set the environment: `DATABASE_URL` (on the same server, use the Docker bridge gateway, e.g. `10.0.0.1`, not `localhost`), `DB_SCHEMA`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `COOKIE_SECURE=true`, `TRUST_PROXY=true`. None are needed at build time.
+4. Point an `A` record for the domain at the server and deploy.
+5. Auto-deploy: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) calls Coolify's deploy API on every push to `main` (with retries). It needs the repo secrets `COOLIFY_API_TOKEN` (deploy permission) and `COOLIFY_APP_UUID`; Coolify's own "Auto Deploy" stays off.
 
-## Troubleshooting
+The backend container applies database migrations when it starts. Both images run as non-root users and have health checks; the frontend starts once the backend is healthy.
 
-**"No data" or empty charts.** Run `python3 cli.py scan` once to populate the DB, then reload.
+## CLI reference
 
-**Port 8080 already in use.** `PORT=9000 python3 cli.py dashboard`.
+Run from `backend/` with `uv run`, or as `backend\.venv\Scripts\python -m claude_lens.cli`.
 
-**Numbers look wrong / stuck.** The DB lives at `~/.claude/token-dashboard.db`. Delete it and re-run `python3 cli.py scan` to rebuild from scratch.
-
-**Running the dashboard twice at the same time.** Don't — both processes will fight over the SQLite DB. Stop all instances before starting a new one.
+```bash
+claude-lens scan                       # incremental sync of ~/.claude/projects to Postgres
+claude-lens scan --full                # re-read every transcript (idempotent)
+claude-lens scan --projects-dir PATH   # another transcript folder
+claude-lens status                     # recent sync runs and row counts
+claude-lens migrate-sqlite             # one-time copy from the old Token Dashboard SQLite file
+claude-lens migrate-sqlite --check-only   # re-run only the parity check
+claude-lens set-password USER          # set or reset a password (creates the user; signs out its sessions)
+```
 
 ## Accuracy note
 
-Claude Code writes each assistant response 2–3 times to disk while it streams (the same API message gets snapshotted as output grows). The dashboard dedupes these by `message.id` so the final tally matches what the API actually billed. If you compare against another tool that sums every JSONL row, expect this dashboard's numbers to be lower — and closer to reality.
+Claude Code writes each assistant response 2–3 times while it streams (the same API message, snapshotted as the output grows). Claude Lens keeps only the last snapshot per `(session_id, message_id)`, so totals match what the API billed. A tool that sums every JSONL row will show higher numbers. Costs are API-equivalent estimates from `pricing.json`; see [Known limitations](docs/KNOWN_LIMITATIONS.md).
 
-## Privacy
+## Security & privacy
 
-Nothing leaves your machine. No telemetry. No remote calls for your data. The browser fetches its JSON from `127.0.0.1`, and all JS/CSS/fonts are served from that same local server — ECharts is vendored into `web/`, and the UI falls back to system fonts rather than pulling from a font CDN. If you want to verify: `grep -r "https://" token_dashboard/ web/` — you'll find nothing.
-
-## Tech stack
-
-Python 3 (stdlib only) for the CLI, scanner, and HTTP server. SQLite for the local cache. Vanilla JS + ECharts for the UI, no build step. Dark theme, hash-based router, server-sent events for live refresh.
-
-Data flow: `cli.py` → `token_dashboard/scanner.py` → SQLite DB; `token_dashboard/server.py` exposes `/api/*` JSON routes and serves `web/`.
+- Single admin account; passwords hashed with argon2. Sessions are server-side (only a SHA-256 of the token is stored), in an HttpOnly, Secure, SameSite=Lax cookie with a 7-day sliding expiry. Five failed logins lock that IP + username out for 15 minutes.
+- Every non-GET API request must be JSON and same-origin (CSRF guard).
+- The backend has no public port; only the Next.js frontend is exposed, over HTTPS.
+- No analytics or third-party calls. Fonts are bundled at build time.
 
 ## Further reading
 
-- [`CLAUDE.md`](CLAUDE.md) — conventions and architecture overview (also picked up automatically by Claude Code)
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to develop and test
-- [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md) — rough edges
-- [`docs/inspiration.md`](docs/inspiration.md) — prior art and how this project diverges
-
-## Contributing
-
-See [`CONTRIBUTING.md`](CONTRIBUTING.md). Short version: fork, `python3 -m unittest discover tests` before opening a PR, keep it stdlib-only.
+- [`backend/README.md`](backend/README.md): collector internals, the API and every endpoint.
+- [`frontend/README.md`](frontend/README.md): the proxy, conventions and page patterns.
+- [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md): rough edges.
+- [`CLAUDE.md`](CLAUDE.md): conventions and architecture for Claude Code sessions.
+- [`docs/plan/`](docs/plan/README.md): how the redesign was planned and built, phase by phase.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): how to develop and test.
 
 ## Credits
 
-This project is a fork of [nateherkai/token-dashboard](https://github.com/nateherkai/token-dashboard), extended with following features:
-
-- In Projects section, added the support of sortable columns and clicking on project opens the details page which show session details associated with the project
-- In Overview section, added Projects KPI
-- In Overview section, added per-category estimated cost to the Input / Output / Cache read / Cache create token cards
-- In Overview section, the Cmd/Ctrl+B privacy blur now blurs only the project-name labels on the "Tokens by project" chart instead of the whole chart
-- In Overview section, replaced the model donut with a family → version sunburst (Claude models only) with hover highlighting and click-to-zoom, and added a "Cost by project" chart
-- In Prompts section, added date range filter (7d, 30d, 90d, All)
-- In Sessions, added the support of sortable columns, local timestamps and clickable full text modal
-- Added an **Estimated Cost** column to the Sessions and Projects tables (and the project drill-down)
-- On the project detail page, added a KPI summary (sessions, turns, core tokens, cache reads, estimated cost)
-- Corrected the model pricing in [`pricing.json`](pricing.json) and added Claude Fable 5, Fable 5.1, Mythos 5, Mythos 5.1, Opus 5.5 and Sonnet 5
-- Added a Windows launcher ([`start_dashboard.bat`](start_dashboard.bat))
-- Edits to [`pricing.json`](pricing.json) apply without restarting the server
+Claude Lens started as a fork of [nateherkai/token-dashboard](https://github.com/nateherkai/token-dashboard), itself inspired by [phuryn/claude-usage](https://github.com/phuryn/claude-usage) (see [`docs/inspiration.md`](docs/inspiration.md)). It has since been rebuilt with a Next.js frontend, a FastAPI backend and Postgres; the transcript parsing, streaming-snapshot dedup, pricing and tips rules carry over from the original.
 
 ## License
 

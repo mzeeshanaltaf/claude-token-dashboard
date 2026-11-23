@@ -116,6 +116,8 @@ ignored). For local `http://` use, set `COOKIE_SECURE=false`.
 
 ## Database tests
 
-DB tests use `TEST_DATABASE_URL`, falling back to `DATABASE_URL`. Each test session
+DB tests use `TEST_DATABASE_URL`, falling back to `DATABASE_URL`. That user must be allowed
+to create schemas, so with the dedicated `claude_lens` role in `DATABASE_URL` (production
+setup) point `TEST_DATABASE_URL` at a more privileged user. Each test session
 creates a throwaway schema `claude_lens_test_<random>`, migrates it, truncates it
 before every test, and drops it at the end. Without a URL the DB tests are skipped.

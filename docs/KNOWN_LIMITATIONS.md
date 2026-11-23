@@ -1,29 +1,35 @@
 # Known Limitations
 
-None of these are blockers — the dashboard still gives you useful information. They're the rough edges you'll notice if you look hard.
+None of these are blockers. They're the rough edges you'll notice if you look hard.
 
-## Skills token counts are partial
+## The data is only as fresh as the last sync
 
-The Skills route shows every skill Claude Code invoked, how many times, across how many sessions, and when. The **tokens-per-call** column is populated only for skills whose `SKILL.md` lives under `~/.claude/skills/`, `~/.claude/scheduled-tasks/`, or `~/.claude/plugins/`. Skills registered elsewhere (project-local `.claude/skills/`, or invocations that go through the `Task` tool with a skill-shaped `subagent_type`) show invocation counts but leave the token column blank.
+The dashboard runs on the VPS, but the transcripts live on your PC. The collector pushes them to Postgres when it runs: once a day from the `Claude Lens - Daily Sync` scheduled task (13:00 by default, or as soon as the PC is back on), or whenever you run `claude-lens scan` by hand. Anything you did since then isn't in the dashboard yet. The "Synced" badge in the top bar shows when the last successful sync finished, and Settings lists the recent runs per machine.
 
-It's still a useful view — you can see which skills dominate your session time — just don't expect a complete per-skill token cost. PRs to broaden the catalog scan welcome.
+## Skills token counts come from the uploaded catalog
 
-## Cost for Pro / Max / Max-20x users is shown as API-equivalent, not subscription value
+The Skills page shows every skill Claude Code invoked, how often, across how many sessions and when. The **tokens per call** column comes from the skill catalog the collector uploads on every scan: the size of each `SKILL.md` it finds under `~/.claude/skills/`, `~/.claude/scheduled-tasks/` and `~/.claude/plugins/` **on the machine that ran the scan** (an estimate of chars ÷ 4). Skills that live elsewhere (project-local `.claude/skills/`, skills dispatched through a subagent, or skills you've since deleted) show invocation counts with "not scanned" in the token column.
 
-The Settings route lets you select your pricing plan, but the Overview cost number is always the API-equivalent (what the same usage would have cost on pay-per-token rates). If you're on Pro you pay a flat $20/month regardless of how much of that API-equivalent number you rack up. We don't do "subscription ROI" math yet — Anthropic doesn't publish per-plan rate limits as public JSON, and faking it would be worse than not doing it.
+## `tool_use_id` is null for migrated rows
+
+Tool errors, result tokens per tool and the subagent type of `Agent` calls need each tool call linked to its result by `tool_use_id`. The old Token Dashboard never stored it, so rows copied from its SQLite file don't have one. A `claude-lens scan --full` re-reads every transcript still on disk and links those calls (it was run on 2026-11-22: 84.8% of tool calls are now linked). Calls from transcripts Claude Code has already deleted stay unlinked, and the Tools page and the session view say how many calls their error figures cover.
+
+## Cost for Pro / Max users is API-equivalent
+
+Settings lets you pick your plan, but cost figures are always API-equivalent: what the same usage would cost at pay-per-token rates. On Pro you pay a flat $20/month however large that number gets. The Overview notes what you pay on your plan, but there's no "subscription value" maths: Anthropic doesn't publish per-plan limits in a form we could use.
 
 ## Cowork sessions are invisible
 
-If you use Claude's Cowork mode (server-side sessions, not local `claude` CLI), those sessions don't write JSONL to `~/.claude/projects/` and the dashboard can't see them.
+Claude's Cowork mode runs server-side and doesn't write JSONL to `~/.claude/projects/`, so the collector can't see it.
 
-## Non-standard model names get tier-fallback pricing
+## Unknown model names get tier-fallback pricing
 
-If a transcript references a model ID not in `pricing.json` (e.g. a future snapshot that isn't in our table yet), cost is estimated from the tier substring (`opus` / `sonnet` / `haiku`) in the name. The UI marks these as `estimated: true`. If the model name contains none of those substrings, cost is reported as null.
+If a transcript references a model ID that isn't in `backend/pricing.json` (a new snapshot, say), its cost is estimated from the tier substring (`opus` / `sonnet` / `haiku`) in the name and marked as estimated. A name with none of those substrings has no cost. Add the model to `pricing.json`; the API reloads it when the file changes (in production, that means a redeploy).
 
-## First scan can be slow
+## Day and hour buckets follow the timezone setting
 
-The first `python3 cli.py scan` on a heavy user's machine can read tens of MB across hundreds of JSONLs. Subsequent scans are incremental (mtime + byte-offset tracking in the `files` table), so they're fast.
+Daily charts, the Activity calendar and the hour × weekday grid bucket by the `timezone` setting, which is `UTC` until you change it in Settings ("Use this browser's zone"). The Activity page shows which zone it uses.
 
-## Running two dashboards against the same DB
+## The first sync is slow over the network
 
-Both will fight over the SQLite file and you'll see inconsistent numbers and occasional `database is locked` errors. Only run one at a time. If you want to view the dashboard from a second device, use `HOST=0.0.0.0` on the one running machine and point the second device's browser at it.
+The collector talks to Postgres on the VPS directly. A first `claude-lens scan` (or `--full`) over thousands of transcripts takes minutes, because every batch pays a ~150 ms round-trip. Later scans are incremental (per-file mtime + byte offset), so they only read new lines.
