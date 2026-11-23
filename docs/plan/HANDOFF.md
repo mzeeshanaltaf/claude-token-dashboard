@@ -25,13 +25,13 @@ Status values: `not-started` · `in-progress` · `blocked` · `done`
   - production on Coolify (project "Claude Lens", compose app `claude-lens`, uuid `i4neuadfuivjgyvqfogonscl`, services `backend` + `frontend`), Let's Encrypt cert, DNS `A claude-lens → 76.13.7.106` (TTL 300);
   - signed-out pages → `/login`; `/api/*` without a cookie → 401; the backend has no published port; login / every page / logout work; the "Synced" badge follows the daily task;
   - the old app is gone from the repo (`token_dashboard/`, `web/`, `cli.py`, `start_dashboard.bat`, `tests/`, root `pricing.json`); `~/.claude/token-dashboard.db` is kept on disk;
-  - the collector, the scheduled task **and production** use the dedicated `claude_lens` Postgres role (owner of `claude_dashboard` only); nothing uses the `postgres` superuser any more except the test suite (`TEST_DATABASE_URL`).
+  - the collector, the scheduled task **and production** use the dedicated `claude_lens` Postgres role (owner of `claude_dashboard` only); nothing uses the `postgres` superuser any more except the test suite (`TEST_DATABASE_URL`);
+  - **auto-deploy on push:** the repo secrets `COOLIFY_API_TOKEN` and `COOLIFY_APP_UUID` are set (2026-11-23); a manual `workflow_dispatch` run got HTTP 200 on the first attempt;
+  - the shared Postgres no longer warns about a collation version mismatch (see the 2026-11-23 maintenance log entry);
+  - **Postgres is off the internet:** 5432 is dropped on the VPS's public interface; the PC reaches it over Tailscale at `100.79.243.92:5432` (see Environment facts).
 - **What doesn't / open issues:**
-  - **auto-deploy secrets:** `.github/workflows/deploy.yml` needs the repo secrets `COOLIFY_API_TOKEN` (the *deploy* token, `COOLIFY_API_TOKEN_DEPLOY` in `.env.local`) and `COOLIFY_APP_UUID` = `i4neuadfuivjgyvqfogonscl`. Setting them with `gh secret set` was blocked by the permission classifier; the user adds them in GitHub → Settings → Secrets → Actions. Until then, pushes to main give a red Actions run, and deploys are triggered by hand (Coolify UI, or `POST /api/v1/deploy?uuid=…`);
-  - the shared Postgres warns **"database postgresdb has a collation version mismatch"** (created with 2.41, the OS provides 2.36). It predates Claude Lens and affects every app in that database; the fix (`REINDEX` + `ALTER DATABASE postgresdb REFRESH COLLATION VERSION`) is the user's call, not this project's;
-  - Postgres 5432 is still open to the internet with no firewall (UFW inactive) and no `sslmode=require`; the user skipped that hardening for now;
-  - carried over: `sync_runs` stays `running` after the final retry fails (phase 01); `core/names.py` slug walk-up rarely matches on this PC; the first-run plan dialog is still unseen live; the sidebar's collapsed state isn't remembered; the `timezone` setting is still `UTC`.
-- **Exact next step:** none planned. Deferred ideas: the Spend control set (budget, burn-rate forecast, plan value) and multi-machine filters in the UI. Once the user trusts the new app, `~/.claude/token-dashboard.db` can be archived (never deleted by a session).
+  - the carried-over issues are fixed (2026-11-23 follow-up, see the session log): project-name walk-up, the stuck `running` sync row, the sidebar's collapsed state, the first-run dialog (checked in a browser); the user set `timezone` to `Asia/Karachi` in Settings.
+- **Exact next step:** none planned. Deferred ideas: the rest of Spend control (budget, burn-rate forecast; plan value is done) and multi-machine filters in the UI (only one machine reports today). Once the user trusts the new app, `~/.claude/token-dashboard.db` can be archived (never deleted by a session).
 
 ## Environment facts
 
@@ -84,6 +84,11 @@ Add facts as you learn them. Never record secrets.
   - Host port 8000 on the VPS is **Coolify's own** API/UI (its `/api/health` answers plain `OK`), not ours; our backend is `expose`-only.
   - **Postgres role `claude_lens`** (2026-11-23): `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE`, `CONNECT` on `postgresdb`, owner of schema `claude_dashboard` and its 11 tables. It can read 0 of the 225 tables in other schemas and can't create schemas; it has `TEMP` (default PUBLIC grant), which the collector's staging needs. `.env.local`: `DATABASE_URL` = this role; `TEST_DATABASE_URL` = the previous superuser URL (the tests create schemas). The database `postgresdb` is shared by ~28 other apps' schemas.
   - Docker Desktop on the PC isn't running by default; start it (`Docker Desktop.exe`) before a local compose test.
+- **Postgres access (2026-11-23):**
+  - The public `76.13.7.106:5432` is blocked. The PC connects over **Tailscale**: VPS `hostinger-vps` = `100.79.243.92`, PC `zeeshan-desktop` = `100.79.196.21`, same tailnet. `DATABASE_URL` and `TEST_DATABASE_URL` in `.env.local` use `@100.79.243.92:5432`. If a connection times out, check that Tailscale is connected on the PC (tray icon, or `"C:\Program Files\Tailscale\tailscale.exe" status`).
+  - VPS side: systemd unit `postgres-public-block` runs `/usr/local/sbin/postgres-public-block.sh`, which inserts `DOCKER-USER -i eth0 … --ctorigdstport 5432 -j DROP` and `INPUT -i eth0 … --dport 5432 -j DROP`. Docker-published ports bypass UFW, so UFW can't do this. Undo: `systemctl disable --now postgres-public-block`.
+  - Containers on the VPS (production via `10.0.0.1`, apps using `76.13.7.106`, n8n, umami via `host.docker.internal`) are unaffected: their traffic never enters on `eth0`.
+  - Tailscale on the VPS was set up with `--accept-dns=false` so it doesn't touch the DNS the containers use.
 
 ## Decisions & deviations
 
@@ -220,6 +225,41 @@ Add newest entries at the top, using this template:
 - **Gotchas:** …
 - **Notes for the next session:** <concrete, actionable; these override the phase file where they conflict>
 ```
+
+### 2026-11-23: Maintenance (Postgres off the internet), done
+- **Did:** found ~20 local projects on the PC (21 `.env*` files) connecting to the shared Postgres as `postgres` over the public IP, plus n8n and four Coolify apps on the VPS using `76.13.7.106:5432` (hairpin). The home IP is dynamic, so the user chose Tailscale over an IP allowlist or per-project roles. Installed Tailscale on the VPS (1.104.7, `--accept-dns=false`) and the PC (winget); the user logged both into one tailnet. Repointed all 23 `@76.13.7.106:5432` connection strings in `E:\Projects\**\.env*` to `@100.79.243.92:5432` (host only; no backups, since they'd contain secrets). Added the `postgres-public-block` systemd unit (see Environment facts).
+- **Files:** changed this file, `README.md` (a "keep Postgres private" note), `docs/plan/README.md` (note on the old public-port assumption). Outside the repo: `.env*` files of the other projects, `../Hostinger VPS/CLAUDE.md`, `~/.claude/CLAUDE.md`, the VPS unit + script.
+- **Verification:** from the PC, `76.13.7.106:5432` → timeout, `100.79.243.92:5432` → open; psycopg via Tailscale as `claude_lens` and `postgres` both OK (TLS on); `claude-lens status` OK. On the VPS, `pg_isready` from throwaway containers on n8n's `coolify` network to `76.13.7.106` and `10.0.0.1`, and on the `b1s6cgeb…` network to `76.13.7.106` → all accepting; umami healthy; 28 live app connections; Claude Lens `/api/health` ok.
+- **Commit:** uncommitted.
+- **Gotchas:** a connection through Tailscale shows up in `pg_stat_activity` as `172.19.0.1` (Docker's proxy), so `pg_hba` can't tell it apart from container traffic. The `Claude Lens - Daily Sync` task is `Interactive` (runs only while the user is signed in), so Tailscale's unattended mode isn't needed.
+- **Notes for the next session:** other projects' docs (`docs/postgres.md` in Greetify / Typing_Tutor / IdeaCanvas, plans) still mention the public host; their `.env*` files are already updated.
+
+### 2026-11-23: Follow-up (carried-over issues + plan value card), done
+- **Did:**
+  - `core/names.py`: `_encode_slug` now matches Claude Code (every non-alphanumeric character → `-`, e.g. `2_Tools` → `2-Tools`). On the real data, walk-up matches went from **37 to 83 of 85** slugs; only one visible name changed (`Markdown2PDF`, which showed its subfolder `nextjs-contact-form`), because the sorted-cwd fallback was usually right;
+  - `cli.py`: after the last retry fails, `_close_lost_run` closes the final attempt's `sync_runs` row (`error`, "connection lost: …") on a fresh connection. Best effort: if the DB is still down it logs a warning and the next scan's 6-hour sweep closes the row;
+  - sidebar: the collapsed state survives reloads without making the shell dynamic. `components/inline-script.tsx` (the pattern from Next's "preventing flash before hydration" guide) sets `data-state`/`data-collapsible` on the desktop sidebar from the `sidebar_state` cookie before first paint; the element has `suppressHydrationWarning`, and `SidebarProvider` starts from the same cookie in a lazy `useState`. Cookie max-age 7 days → 1 year. All changes in `components/ui/sidebar.tsx` are marked `Claude Lens:`;
+  - Overview **Plan value** card (`components/overview/plan-value.tsx`): API-equivalent cost per calendar month (from all-time `/api/daily`, so in the timezone setting) as a multiple of the plan's monthly price; "this month so far" and "since <first month>" headlines plus the last 12 months as a BarList. Hidden on API pricing. Range-independent, like the Activity calendar. `usePaidPlan()` there also feeds the Est. cost card's "You pay …" note;
+  - docs: README (Overview row), frontend/README (hydration note on InlineScript), KNOWN_LIMITATIONS (plan value).
+- **Files:** created `frontend/components/inline-script.tsx`, `frontend/components/overview/plan-value.tsx` / changed `backend/claude_lens/core/names.py`, `backend/claude_lens/cli.py`, `backend/tests/test_names.py`, `backend/tests/test_cli.py`, `frontend/components/ui/sidebar.tsx`, `frontend/components/overview/overview-page.tsx`, `README.md`, `frontend/README.md`, `docs/KNOWN_LIMITATIONS.md`, this file.
+- **Verification:**
+  - `uv run pytest tests/test_names.py tests/test_cli.py` → 31 passed (3 new tests: encoding, walk-up through `_`/`.`, last row closed after 4 failed attempts, best-effort close when the DB is gone). Full suite `uv run pytest` → **268 passed** in 724 s (265 + 3).
+  - `pnpm typecheck`, `pnpm lint`: clean. `pnpm build`: clean, `/overview` still `○`.
+  - Headless Chrome against a local backend (:8001, real data, read-only apart from the login session) + `next start` (:3001): **18/18 PASS**: Markdown2PDF name from `/api/projects`; the plan value card (Nov 2026 so far 43×, since Feb 2026 32×, 10 month rows); sidebar expanded with no cookie → Ctrl+\ writes `sidebar_state=false` (365 days) → **collapsed in the first animation frame** after a reload and on a hard load of another page, still collapsed after hydration → reopened → expanded after reload; no overflow at 390px; light and dark screenshots checked by eye; **first-run dialog** with `/api/settings` faked to `plan: null` in the browser (shows, Escape doesn't close it, 4 plans listed, Pro → Continue posts `{"plan":"pro"}`, closes, toast); the real setting stayed `pro`; **no console errors or hydration warnings**.
+- **Commit:** uncommitted.
+- **Gotchas:** inline-script corrections need `document.currentScript.parentElement`, so the script sits inside the element it corrects. CSS `uppercase` labels come back uppercased from Playwright's `innerText`.
+- **Notes for the next session:** the scratchpad check script (`check.mjs`) isn't kept; recreate it from this entry if needed.
+
+### 2026-11-23: Maintenance (deploy secrets, Postgres collation), done
+- **Did:**
+  - set the repo secrets `COOLIFY_API_TOKEN` (value of `COOLIFY_API_TOKEN_DEPLOY` from `.env.local`, piped, never printed) and `COOLIFY_APP_UUID` with `gh secret set --repo mzeeshanaltaf/claude-token-dashboard`;
+  - fixed the shared Postgres collation mismatch. Container `postgres-pgvector` (compose project `/docker/postgresql-iwon`, not Coolify) runs Debian bookworm (glibc 2.36); `postgresdb` and `postgres` had been created under glibc 2.41, while `umami` and `template1` were already at 2.36. Because the server had run on 2.36 since 2026-01-25, the fix moved everything to 2.36: `REINDEX INDEX CONCURRENTLY` on every non-catalog index with a libc/default collation in `postgresdb` (about 400 indexes in 26 schemas, 36 s, no locks for the apps), then `ALTER DATABASE postgresdb|postgres REFRESH COLLATION VERSION` (2.41 → 2.36). `postgres` had no user indexes;
+  - pinned the image in `/docker/postgresql-iwon/docker-compose.yml` from `pgvector/pgvector:pg17` to `pg17-bookworm` (backup `docker-compose.yml.bak-2026-11-23`). `pg17` and `pg17-bookworm` currently have the same digest, so this only stops a future default switch to trixie from bringing the mismatch back. The container was not recreated.
+- **Files:** changed this file only (VPS changes are outside the repo).
+- **Verification:** `gh secret list` shows both secrets; `gh workflow run deploy.yml` → run 45120809193 "Attempt 1 -> HTTP 200, Deploy queued". Invalid indexes before/after: 0/0. `pg_database` now shows `datcollversion = actual = 2.36` for all four databases, and psql no longer prints the warning. `docker compose config -q` OK after the pin. `/api/health` → `ok`.
+- **Commit:** uncommitted (this handoff update only).
+- **Gotchas:** the running local image `pgvector/pgvector:pg17` (digest `1a5ea285…`) is older than the current remote `pg17` (`b513c485…`); both are bookworm.
+- **Notes for the next session:** if the Postgres image ever moves to trixie (glibc 2.41), rerun the same reindex + refresh, in the opposite direction.
 
 ### 2026-11-23: Phase 07, done
 - **Did:**

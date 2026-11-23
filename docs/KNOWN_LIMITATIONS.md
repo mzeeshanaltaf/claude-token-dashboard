@@ -16,7 +16,7 @@ Tool errors, result tokens per tool and the subagent type of `Agent` calls need 
 
 ## Cost for Pro / Max users is API-equivalent
 
-Settings lets you pick your plan, but cost figures are always API-equivalent: what the same usage would cost at pay-per-token rates. On Pro you pay a flat $20/month however large that number gets. The Overview notes what you pay on your plan, but there's no "subscription value" maths: Anthropic doesn't publish per-plan limits in a form we could use.
+Settings lets you pick your plan, but cost figures are always API-equivalent: what the same usage would cost at pay-per-token rates. On Pro you pay a flat $20/month however large that number gets. The Overview's **Plan value** card divides each calendar month's API-equivalent cost by your plan's price. It counts every month at the plan you have selected now (plan changes aren't recorded), and it can't tell you how close you came to your plan's usage limits: Anthropic doesn't publish those in a form we could use.
 
 ## Cowork sessions are invisible
 

@@ -155,6 +155,31 @@ def _scan_once(settings: Settings, root: Path, full: bool, batch_lines: int, sta
     return 0
 
 
+def _close_lost_run(settings: Settings, state: _RunState) -> None:
+    """After the last retry, close the final attempt's run row on a fresh connection.
+
+    Earlier attempts' rows are closed by the next attempt; the last one has no
+    next attempt. Best effort: if the database is still unreachable, the next
+    scan's stale-run sweep marks the row as interrupted instead.
+    """
+    if state.run_id is None:
+        return
+    try:
+        conn = connect(settings)
+        try:
+            with conn.transaction():
+                conn.execute(
+                    "UPDATE sync_runs SET finished_at = now(), status = 'error', error = %s"
+                    " WHERE id = %s AND status = 'running'",
+                    (f"connection lost: {state.last_error}", state.run_id),
+                )
+        finally:
+            conn.close()
+        state.run_id = None
+    except psycopg.OperationalError as e:
+        log.warning("could not close sync run %d: %s", state.run_id, str(e).strip())
+
+
 def _scan_with_retries(args: argparse.Namespace, settings: Settings) -> int:
     if not settings.database_url:
         log.error("DATABASE_URL is not set (put it in .env.local at the repo root)")
@@ -172,6 +197,7 @@ def _scan_with_retries(args: argparse.Namespace, settings: Settings) -> int:
             state.last_error = str(e).strip()
             if attempt >= RETRIES:
                 log.error("scan failed after %d attempts: %s", attempt + 1, state.last_error)
+                _close_lost_run(settings, state)
                 return 1
             attempt += 1
             log.warning("database error: %s; retry %d/%d in %ds",

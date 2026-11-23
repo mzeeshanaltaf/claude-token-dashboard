@@ -5,6 +5,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
 import { Slot } from "radix-ui"
 
+import { InlineScript } from "@/components/inline-script"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,7 +26,19 @@ import {
 import { PanelLeftIcon } from "lucide-react"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
-const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
+// Claude Lens: a year (was 7 days), so a collapsed sidebar stays collapsed.
+const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+const SIDEBAR_COOKIE_RE = new RegExp(`(?:^|; )${SIDEBAR_COOKIE_NAME}=(true|false)(?:;|$)`)
+
+// Claude Lens: the saved open/collapsed state. The server can't see it (the
+// dashboard shell is prerendered), so <Sidebar> corrects its own attributes
+// with an inline script before paint, and the provider starts from the same
+// cookie on the client.
+function readSidebarCookie(): boolean | undefined {
+  if (typeof document === "undefined") return undefined
+  const m = SIDEBAR_COOKIE_RE.exec(document.cookie)
+  return m ? m[1] === "true" : undefined
+}
 const SIDEBAR_WIDTH = "16rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
@@ -71,7 +84,8 @@ function SidebarProvider({
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
-  const [_open, _setOpen] = React.useState(defaultOpen)
+  // Claude Lens: start from the saved cookie on the client (see readSidebarCookie).
+  const [_open, _setOpen] = React.useState(() => readSidebarCookie() ?? defaultOpen)
   const open = openProp ?? _open
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
@@ -213,7 +227,13 @@ function Sidebar({
       data-variant={variant}
       data-side={side}
       data-slot="sidebar"
+      // Claude Lens: the inline script below may set data-state before React hydrates.
+      suppressHydrationWarning
     >
+      {/* Claude Lens: apply the saved open/collapsed state before first paint. */}
+      <InlineScript
+        html={`{var s=document.currentScript,p=s&&s.parentElement,m=${SIDEBAR_COOKIE_RE}.exec(document.cookie);if(p&&m){var o=m[1]==="true";p.setAttribute("data-state",o?"expanded":"collapsed");p.setAttribute("data-collapsible",o?"":${JSON.stringify(collapsible)})}}`}
+      />
       {/* This is what handles the sidebar gap on desktop */}
       <div
         data-slot="sidebar-gap"

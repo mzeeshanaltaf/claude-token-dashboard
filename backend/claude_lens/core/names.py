@@ -9,8 +9,9 @@ from typing import Optional
 
 
 def _encode_slug(path: str) -> str:
-    """Claude Code's project-slug encoding: each of `:`, `\\`, `/`, space → one `-`."""
-    return re.sub(r"[:\\/ ]", "-", path)
+    """Claude Code's project-slug encoding: every character except ASCII letters
+    and digits becomes one `-` (so `2_Tools` → `2-Tools`, `a.b` → `a-b`)."""
+    return re.sub(r"[^A-Za-z0-9]", "-", path)
 
 
 def _walk_to_root(cwd: str, slug: str) -> Optional[str]:

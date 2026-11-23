@@ -88,7 +88,7 @@ docker-compose.yml, .env.example
   - **235,402 messages**, **159,328 tool_calls** and **1,085 sessions**, from 2026-02-27 to 2026-11-20;
   - **1,280 tracked files, 75 of which no longer exist on disk.** History therefore has to be **copied** from SQLite; rescanning the JSONLs would lose it.
 - `~/.claude/projects` is about 2.6 GB across 59 project folders. `cleanupPeriodDays` is set to 1000.
-- Postgres is publicly reachable on port 5432 from the PC, so the collector connects to it directly. The round-trip to the VPS dominates over the network, so ingest **must be batched** (COPY into staging tables), never one `execute()` per line.
+- Postgres is publicly reachable on port 5432 from the PC, so the collector connects to it directly. *(Since 2026-11-23 the public port is closed and the PC connects over Tailscale; see HANDOFF.md, Environment facts.)* The round-trip to the VPS dominates over the network, so ingest **must be batched** (COPY into staging tables), never one `execute()` per line.
 - **The original `.gitignore` didn't cover `.env.local`.** Phase 00 fixes this first.
 - **Bug to fix in the port.** `/api/prompts` prices only cache-read tokens (`token_dashboard/server.py:181`). The new prompt cost is the full cost of the assistant turn.
 - **Hydration rule** (from the user's global CLAUDE.md): any client component that uses `localStorage`, `Date.now()`, `crypto.randomUUID()` or `window` during render or state init must be mounted with `next/dynamic(..., { ssr: false })`. Otherwise you get dead UI.

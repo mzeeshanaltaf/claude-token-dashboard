@@ -11,27 +11,20 @@ import { ErrorState } from "@/components/error-state";
 import { InfoTip } from "@/components/info-tip";
 import { KpiCard } from "@/components/kpi-card";
 import { ChartSkeleton, KpiGridSkeleton, TableSkeleton } from "@/components/loading";
+import { PlanValueCard, usePaidPlan } from "@/components/overview/plan-value";
 import { SectionCard } from "@/components/section-card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useRangedHref } from "@/hooks/use-url-state";
 import { fmt } from "@/lib/format";
 import { GLOSSARY } from "@/lib/glossary";
-import { useApiQuery, useRangedQuery } from "@/lib/queries";
+import { useRangedQuery } from "@/lib/queries";
 import { cacheHitRate } from "@/lib/usage";
-
-interface PlanInfo {
-  label?: string;
-  monthly?: number | null;
-}
 
 /** "You pay $100/mo on Max" (the old planSubtitle); nothing for API pricing. */
 function usePlanNote(): string | undefined {
-  const plan = useApiQuery("/api/plan");
-  const key = plan.data?.plan;
-  if (!key || key === "api") return undefined;
-  const p = (plan.data?.pricing?.plans as Record<string, PlanInfo> | undefined)?.[key];
-  return p?.monthly ? `You pay $${p.monthly}/mo on ${p.label ?? key}` : undefined;
+  const plan = usePaidPlan();
+  return plan ? `You pay $${plan.monthly}/mo on ${plan.label}` : undefined;
 }
 
 export function OverviewPage() {
@@ -90,6 +83,8 @@ export function OverviewPage() {
       )}
 
       {o ? <TokenComposition totals={o} dim={dim} /> : <ChartSkeleton className="h-36" />}
+
+      <PlanValueCard />
 
       {daily.isError ? (
         <ErrorState error={daily.error} onRetry={() => daily.refetch()} />

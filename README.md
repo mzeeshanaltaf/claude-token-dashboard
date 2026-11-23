@@ -10,7 +10,7 @@ Self-hosted: your transcripts only ever go to your own database and your own ser
 
 | Page | What it shows |
 |---|---|
-| **Overview** | Estimated cost, sessions, prompts and cache hit rate with sparklines; token composition (input / output / cache read / cache write, as tokens or cost); daily tokens or cost per model; model mix; top projects, top tools and recent sessions. |
+| **Overview** | Estimated cost, sessions, prompts and cache hit rate with sparklines; token composition (input / output / cache read / cache write, as tokens or cost); on Pro / Max, plan value (API-equivalent cost per month as a multiple of what you pay); daily tokens or cost per model; model mix; top projects, top tools and recent sessions. |
 | **Activity** | A 12-month calendar heatmap (cost or tokens per day), an hour × weekday grid, streaks, the busiest day and peak hour. |
 | **Prompts** | Every prompt with the full cost of the turn that answered it; search, sort by tokens / cost / recency, a detail sheet with the full text. |
 | **Sessions** | Server-paginated, sortable and filterable by project and model. Each session opens a deep view: context growth per turn (with compactions), cost per turn, a tool timeline, subagents, files touched and the turn-by-turn table. |
@@ -126,6 +126,8 @@ Set these in `.env.local` locally and in Coolify's environment settings in produ
 | `TEST_DATABASE_URL` | tests | `DATABASE_URL` | Postgres for the DB tests (throwaway `claude_lens_test_*` schemas, so this user needs `CREATE` on the database) |
 
 **Recommended: a dedicated database role.** The app only needs to own its schema. Create a login role (no superuser, no `CREATEDB`), `GRANT CONNECT` on the database, and make it the owner of the `claude_dashboard` schema and its tables (`ALTER SCHEMA … OWNER TO`, `ALTER TABLE … OWNER TO`). Use it in `DATABASE_URL` for both the collector and the backend; migrations work without database-level `CREATE` once the schema exists. Keep a more privileged URL in `TEST_DATABASE_URL` for the test suite.
+
+**Keep Postgres off the public internet.** The collector needs to reach Postgres from your PC, but the port doesn't have to be public. A private network such as Tailscale or WireGuard works well, and the reference deployment uses Tailscale. If Postgres runs in Docker, remember that published ports bypass UFW: block them in the `DOCKER-USER` chain or bind them to a private address.
 
 Pricing lives in [`backend/pricing.json`](backend/pricing.json) (per-model rates and plans), sourced from the [Anthropic pricing page](https://platform.claude.com/docs/en/about-claude/pricing). The API reloads it when the file changes.
 

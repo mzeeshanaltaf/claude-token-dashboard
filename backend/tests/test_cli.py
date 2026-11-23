@@ -180,6 +180,40 @@ def test_scan_gives_up_after_three_retries(db, cli_env, capsys, monkeypatch):
     assert "scan failed after 4 attempts" in capsys.readouterr().err
 
 
+def test_scan_closes_the_last_run_row_when_every_attempt_fails(db, cli_env, capsys, monkeypatch):
+    monkeypatch.setattr(cli, "_sleep", lambda s: None)
+
+    def lost(*a, **k):
+        raise psycopg.OperationalError("server closed the connection unexpectedly")
+
+    monkeypatch.setattr(cli, "scan", lost)
+    assert main(["scan", "--projects-dir", str(cli_env)]) == 1
+    assert "scan failed after 4 attempts" in capsys.readouterr().err
+    runs = q(db, "SELECT status, left(error, 16), finished_at IS NOT NULL FROM sync_runs ORDER BY id")
+    assert runs == [("error", "connection lost:", True)] * 4
+
+
+def test_closing_the_last_run_row_is_best_effort(db, cli_env, capsys, monkeypatch):
+    monkeypatch.setattr(cli, "_sleep", lambda s: None)
+    real_connect = cli.connect
+    calls = {"n": 0}
+
+    def lost(*a, **k):
+        raise psycopg.OperationalError("server closed the connection unexpectedly")
+
+    def connect_then_die(settings):
+        calls["n"] += 1
+        if calls["n"] > 4:  # the database is gone by the time the CLI tries to close the row
+            raise psycopg.OperationalError("connection refused")
+        return real_connect(settings)
+
+    monkeypatch.setattr(cli, "scan", lost)
+    monkeypatch.setattr(cli, "connect", connect_then_die)
+    assert main(["scan", "--projects-dir", str(cli_env)]) == 1
+    assert "could not close sync run" in capsys.readouterr().err
+    assert q(db, "SELECT status FROM sync_runs ORDER BY id")[-1] == ("running",)
+
+
 def test_status_prints_runs_and_counts(db, cli_env, capsys):
     main(["scan", "--projects-dir", str(cli_env)])
     capsys.readouterr()
